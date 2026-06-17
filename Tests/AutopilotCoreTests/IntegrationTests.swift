@@ -42,6 +42,8 @@ import ApplicationServices
                 Step(id: "assert-status", action: .assert,
                      target: Selector(identifier: "statusLabel"),
                      assert: Assertion(property: .value, op: .contains, expected: "Ada")),
+                // Terminate so we don't leak a TestHostApp instance across runs.
+                Step(id: "quit", action: .terminate),
             ]
         )
         let runner = PlanRunner()

@@ -1,1 +1,3 @@
-print("AutopilotMCP")
+import Foundation
+
+MCPServer().run()

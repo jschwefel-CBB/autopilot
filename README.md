@@ -37,6 +37,11 @@ swift build
 
 Exit codes: `0` pass, `1` test failure, `2` plan/parse error, `3` permission missing.
 
+**Writing plans:** see **[docs/AUTHORING.md](docs/AUTHORING.md)** — the complete
+plan-authoring guide (actions, assertions, selectors, discovery, hygiene
+patterns, and a worked end-to-end example). Written to be usable by both an
+AI agent and a human.
+
 ## Plan example
 
 ```json

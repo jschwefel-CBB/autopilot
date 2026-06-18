@@ -172,6 +172,72 @@ import ApplicationServices
         #expect(clickStep?.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
+    @Test func assertRegionReadsKnownColor() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-region-\(UUID().uuidString)")
+        // colorSwatch is a solid #3478F6 view; assertRegion over its center must match.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: region color",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                // dominant mode over the solid swatch. Tolerance is wide (60)
+                // because screen capture returns pixels in the DISPLAY color space,
+                // not the sRGB the swatch was drawn in — on a wide-gamut display
+                // sRGB #3478F6 reads as a lighter blue. (See the color-space caveat
+                // in AUTHORING.md §13.) The test still rejects any non-blue region.
+                Step(id: "region", action: .assertRegion, target: Selector(identifier: "colorSwatch"),
+                     args: { var a = ActionArgs(); a.color = "#3478F6"; a.width = 12; a.height = 12
+                             a.mode = "dominant"; a.tolerance = 60; return a }()),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    @Test func snapshotMissingReferenceFailsWithoutFlag() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-snap-\(UUID().uuidString)")
+        let artifacts = dir.appendingPathComponent("art")
+        let refPath = "ref/swatch.png"   // does not exist
+        func makePlan() -> Plan {
+            Plan(schemaVersion: "1.0", name: "host: snapshot",
+                 target: TargetApp(path: binary.path),
+                 defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+                 steps: [
+                    Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                         args: { var a = ActionArgs(); a.present = true; return a }()),
+                    Step(id: "snap", action: .snapshot, target: Selector(identifier: "colorSwatch"),
+                         args: { var a = ActionArgs(); a.reference = refPath; a.width = 30; a.height = 30; return a }()),
+                    Step(id: "quit", action: .terminate),
+                 ])
+        }
+        // 1) Without --update-snapshots: a missing reference is a FAILURE.
+        let r1 = try PlanRunner().run(makePlan(),
+            options: RunOptions(artifactsDir: artifacts, planBaseDir: dir, updateSnapshots: false))
+        #expect(r1.steps.first { $0.id == "snap" }?.result == .fail)
+
+        killExistingTestHostApps()
+        // 2) With --update-snapshots: writes the reference and passes.
+        let r2 = try PlanRunner().run(makePlan(),
+            options: RunOptions(artifactsDir: artifacts, planBaseDir: dir, updateSnapshots: true))
+        #expect(r2.steps.first { $0.id == "snap" }?.result == .pass)
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent(refPath).path))
+    }
+
     @Test func checkboxNumericValueIsReadable() async throws {
         guard AXIsProcessTrusted() else { return }
         let binary = testHostApp()

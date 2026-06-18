@@ -163,6 +163,9 @@ struct Run: ParsableCommand {
     @Flag(name: .long, help: "Continue after a failing step instead of stopping.")
     var keepGoing: Bool = false
 
+    @Flag(name: .long, help: "Write/overwrite snapshot reference images (otherwise a missing reference fails).")
+    var updateSnapshots: Bool = false
+
     @Flag(name: .long, help: "Print report.json to stdout instead of the human summary.")
     var json: Bool = false
 
@@ -194,7 +197,8 @@ struct Run: ParsableCommand {
         }
 
         let report = try PlanRunner().run(plan, options: RunOptions(
-            keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir))
+            keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir,
+            updateSnapshots: updateSnapshots))
         let reporter = Reporter()
         if json {
             FileHandle.standardOutput.write(try reporter.json(report))
@@ -230,7 +234,8 @@ struct Run: ParsableCommand {
                 continue
             }
             let report = try PlanRunner().run(plan, options: RunOptions(
-                keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir))
+                keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir,
+            updateSnapshots: updateSnapshots))
             if report.permissions?.accessibility == false { permMissing = true }
             reports.append(report)
             FileHandle.standardError.write(Data("  [\(report.result.rawValue)] \(report.plan)\n".utf8))

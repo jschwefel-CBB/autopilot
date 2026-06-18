@@ -533,6 +533,13 @@ lets you verify them by sampling a screen pixel's color.
   theme/display differences mean the exact pixel is rarely the exact hex. Pick a
   sample point in the *solid interior* of the colored glyph/region, not its edge.
 
+> **Color-space caveat (important):** screen capture returns pixels in the
+> **display's color space** (e.g. Display P3 on modern Macs), *not* the sRGB your
+> app draws in. So an sRGB `#3478F6` can read back as a noticeably different hex on
+> a wide-gamut display. **Don't use your app's source color value** — instead run
+> the assertion once, read the `actual` hex from the failure report, and use that
+> (with tolerance). Or use a generous tolerance that spans the gap.
+
 **Limits:** exact hues are display- and theme-dependent; assert representative
 points with tolerance, not pixel-perfect equality. **Sampling a thin,
 anti-aliased glyph (e.g. one colored bracket character) is fragile** — the colored
@@ -736,6 +743,10 @@ Three tools, increasing robustness:
 - `snapshot` `reference` resolves relative to the plan file. **Commit the
   reference PNG** so later runs compare against it; `maxDiff` is the allowed
   fraction of differing pixels (default `0.02`).
+- **A missing reference is a FAILURE, not a silent pass.** To create or refresh
+  a baseline, run with `autopilot run … --update-snapshots` (writes/overwrites
+  the reference and passes). This is the standard snapshot-testing convention —
+  it stops a bad or absent baseline from quietly "passing" on first run.
 - All three **poll**, so a color/region that settles a frame late still passes.
 - Limits unchanged: exact hues are display/theme-dependent — assert with
   tolerance, and prefer the app's own snapshot tests for dense pixel-perfect

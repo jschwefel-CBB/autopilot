@@ -38,6 +38,16 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate 
         check.setAccessibilityIdentifier("flagCheckbox")
         content.addSubview(check)
 
+        // A solid-color swatch with a known RGB, for visual-assertion tests
+        // (assertPixel / assertRegion / snapshot). #3478F6 = (52,120,246).
+        let swatch = NSView(frame: NSRect(x: 250, y: 60, width: 60, height: 60))
+        swatch.wantsLayer = true
+        swatch.layer?.backgroundColor = NSColor(srgbRed: 52/255, green: 120/255, blue: 246/255, alpha: 1).cgColor
+        swatch.setAccessibilityIdentifier("colorSwatch")
+        swatch.setAccessibilityElement(true)
+        swatch.setAccessibilityRole(.group)
+        content.addSubview(swatch)
+
         // An NSSearchField — its editing happens in a child field editor, so it
         // exercises the keycode-based `type` path (unicode-string events fail here).
         let search = NSSearchField(frame: NSRect(x: 20, y: 0, width: 200, height: 24))

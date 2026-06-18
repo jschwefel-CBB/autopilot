@@ -6,9 +6,13 @@ public struct RunOptions {
     public var artifactsDir: URL
     /// Directory of the plan file, used to resolve relative vision-template paths.
     public var planBaseDir: URL?
-    public init(keepGoing: Bool = false, artifactsDir: URL, planBaseDir: URL? = nil) {
+    /// Write/overwrite snapshot reference images. When false (default), a missing
+    /// reference is a FAILURE, not a silent pass — the standard snapshot convention.
+    public var updateSnapshots: Bool
+    public init(keepGoing: Bool = false, artifactsDir: URL, planBaseDir: URL? = nil,
+                updateSnapshots: Bool = false) {
         self.keepGoing = keepGoing; self.artifactsDir = artifactsDir
-        self.planBaseDir = planBaseDir
+        self.planBaseDir = planBaseDir; self.updateSnapshots = updateSnapshots
     }
 }
 
@@ -329,13 +333,27 @@ public struct PlanRunner {
         let rect = CGRect(x: center.x - CGFloat(w) / 2, y: center.y - CGFloat(h) / 2,
                           width: CGFloat(w), height: CGFloat(h))
 
-        // First run: establish the baseline.
+        // Missing reference: only write it when explicitly updating snapshots.
+        // Otherwise this is a FAILURE — a silent first-run "pass" would let a bad
+        // or absent baseline slip through (standard snapshot-testing convention).
         if !FileManager.default.fileExists(atPath: refPath) {
+            guard options.updateSnapshots else {
+                return StepResult(id: step.id, result: .fail, durationMs: 0,
+                                  expected: "reference at \(refRel)",
+                                  actual: "missing",
+                                  message: "no reference image; re-run with --update-snapshots to create it")
+            }
             try? FileManager.default.createDirectory(
                 at: URL(fileURLWithPath: refPath).deletingLastPathComponent(), withIntermediateDirectories: true)
             let ok = Screenshot.captureRegion(rect, to: refPath)
             return StepResult(id: step.id, result: ok ? .pass : .error, durationMs: 0,
                               message: ok ? "reference written: \(refPath)" : "failed to write reference")
+        }
+        // Updating: overwrite the reference and pass.
+        if options.updateSnapshots {
+            let ok = Screenshot.captureRegion(rect, to: refPath)
+            return StepResult(id: step.id, result: ok ? .pass : .error, durationMs: 0,
+                              message: ok ? "reference updated: \(refPath)" : "failed to update reference")
         }
 
         // Subsequent runs: capture live and diff against the reference.

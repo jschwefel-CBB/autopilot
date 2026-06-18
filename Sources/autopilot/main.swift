@@ -6,9 +6,40 @@ struct Autopilot: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "autopilot",
         abstract: "Run a declarative GUI test plan against a macOS app.",
-        subcommands: [Run.self, Doctor.self, DumpAxtree.self, Lint.self, Find.self],
+        subcommands: [Run.self, Doctor.self, DumpAxtree.self, Lint.self, Find.self, Suggest.self],
         defaultSubcommand: Run.self
     )
+}
+
+struct Suggest: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "suggest",
+        abstract: "Launch an app and suggest a selector for each interactive element.")
+
+    @Argument(help: "Bundle id or path to a .app bundle.")
+    var app: String
+
+    func run() throws {
+        let target: TargetApp = app.hasSuffix(".app") || app.hasPrefix("/")
+            ? TargetApp(path: app) : TargetApp(bundleId: app)
+        guard Permissions().hasAccessibility() else {
+            FileHandle.standardError.write(Data("Accessibility permission required (run: autopilot doctor)\n".utf8))
+            throw ExitCode(3)
+        }
+        let launched = try AppLauncher().launch(target)
+        let appEl = AXTree.application(pid: launched.pid)
+        _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true,
+                                        app: appEl, timeoutMs: 4000, intervalMs: 100)
+        let snap = AXTree.snapshot(appEl)
+        let suggestions = SelectorSuggester.suggest(from: snap.nodes)
+        for s in suggestions {
+            let sel = (try? String(data: JSONEncoder.pretty.encode(s.selector), encoding: .utf8)) ?? ""
+            let oneLine = sel.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "  ", with: " ")
+            let label = s.label.isEmpty ? "" : "  “\(s.label)”"
+            print("\(s.role)\(label)\n    \(oneLine)\n    # \(s.note)")
+        }
+        AppLauncher().terminate(launched)
+    }
 }
 
 struct DumpAxtree: ParsableCommand {

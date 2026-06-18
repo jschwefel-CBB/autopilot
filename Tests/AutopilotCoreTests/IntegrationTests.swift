@@ -141,6 +141,37 @@ import ApplicationServices
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
+    @Test func indexDisambiguatesMultipleButtons() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps()
+        defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-idx-\(UUID().uuidString)")
+        // {role: AXButton} matches several buttons → ambiguous. `index` picks one,
+        // so the click resolves instead of erroring.
+        let plan = Plan(
+            schemaVersion: "1.0",
+            name: "host: index disambiguation",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor,
+                     target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "click-first-button", action: .click,
+                     target: Selector(role: "AXButton", index: 0)),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        // The click step must resolve (not error on ambiguity) — that's the point.
+        let clickStep = report.steps.first { $0.id == "click-first-button" }
+        #expect(clickStep?.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
     @Test func checkboxNumericValueIsReadable() async throws {
         guard AXIsProcessTrusted() else { return }
         let binary = testHostApp()

@@ -39,9 +39,16 @@ public struct AXResolver {
     /// On ambiguity the error lists up to `maxReportedMatches` descriptors.
     /// `path` and `vision` are handled by the Targeting orchestrator, not here.
     public func resolveOne(in appElement: AXUIElement, selector: Selector) throws -> AXUIElement {
+        // `within`: resolve the parent first, then scope the search to its subtree.
+        let root: AXUIElement
+        if let parent = selector.withinSelector {
+            root = try resolveOne(in: appElement, selector: parent)
+        } else {
+            root = appElement
+        }
         var matches: [AXUIElement] = []
         var descriptors: [String] = []
-        AXTree.walk(appElement) { el in
+        AXTree.walk(root) { el in
             if Self.matches(node: Self.node(of: el), selector: selector) {
                 matches.append(el)
                 if descriptors.count < Self.maxReportedMatches {
@@ -52,6 +59,13 @@ public struct AXResolver {
         }
         let desc = Self.describe(selector)
         if matches.isEmpty { throw TargetingError.notFound(selector: desc) }
+        // An explicit `index` disambiguates an intentionally-multiple match.
+        if let idx = selector.index {
+            guard idx >= 0, idx < matches.count else {
+                throw TargetingError.notFound(selector: "\(desc) — index \(idx) out of range (\(matches.count) matches)")
+            }
+            return matches[idx]
+        }
         if matches.count > 1 {
             throw TargetingError.ambiguous(selector: desc, count: matches.count, matches: descriptors)
         }

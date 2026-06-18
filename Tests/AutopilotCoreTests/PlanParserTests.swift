@@ -105,6 +105,20 @@ import Foundation
         }
     }
 
+    @Test func selectorIndexAndWithinDecode() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"s","action":"click",
+           "target":{"role":"AXButton","index":2,
+                     "within":{"role":"AXRow","index":0}}}]}
+        """.data(using: .utf8)!
+        let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        let sel = plan.steps[0].target!
+        #expect(sel.index == 2)
+        #expect(sel.withinSelector?.role == "AXRow")
+        #expect(sel.withinSelector?.index == 0)
+    }
+
     @Test func assertPixelNeedsColor() throws {
         // assertPixel doesn't require a target, but runtime needs args.color;
         // parser accepts it (color is checked at run time), so this parses fine.

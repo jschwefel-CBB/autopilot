@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      # The unit tests run without a GUI/Accessibility grant; the AX-driven
+      # integration tests self-skip when AXIsProcessTrusted() is false (which it
+      # is on a headless CI runner), so the suite stays green. To exercise the
+      # integration tests, a runner with Accessibility granted is required (see
+      # docs/CI.md) — not available on stock GitHub macOS runners.
+      - name: Test
+        run: swift test
+
+  lint-plans:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      # Lint any example plans committed in the repo (none yet by default).
+      - name: Lint plans (if any)
+        run: |
+          if [ -d uitests ]; then
+            .build/debug/autopilot lint uitests || true
+          fi

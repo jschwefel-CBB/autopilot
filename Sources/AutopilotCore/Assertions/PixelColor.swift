@@ -56,23 +56,31 @@ public enum PixelColor {
         return RGB(r: (best.key >> 16) & 0xFF, g: (best.key >> 8) & 0xFF, b: best.key & 0xFF)
     }
 
-    /// Sample every pixel in a screen rectangle. Returns row-major RGB list.
-    public static func sampleRegion(_ rect: CGRect) -> [RGB] {
-        guard let image = CGWindowListCreateImage(rect, .optionAll, kCGNullWindowID, []),
-              let data = image.dataProvider?.data,
-              let ptr = CFDataGetBytePtr(data) else { return [] }
+    /// Draw a CGImage into a fixed **sRGB** RGBA8 context and return its pixels.
+    /// Captured screen pixels arrive in the display's color space (e.g. Display
+    /// P3); drawing them into an sRGB context converts them, so an author's sRGB
+    /// `#RRGGBB` matches regardless of the display gamut.
+    static func sRGBPixels(of image: CGImage) -> [RGB] {
         let w = image.width, h = image.height
-        let bpr = image.bytesPerRow, bpp = image.bitsPerPixel / 8
-        var out: [RGB] = []
-        out.reserveCapacity(w * h)
-        for y in 0..<h {
-            for x in 0..<w {
-                let o = y * bpr + x * bpp
-                // BGRA on macOS.
-                out.append(RGB(r: Int(ptr[o + 2]), g: Int(ptr[o + 1]), b: Int(ptr[o])))
-            }
+        guard w > 0, h > 0, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return [] }
+        let bpr = w * 4
+        var buf = [UInt8](repeating: 0, count: bpr * h)
+        guard let ctx = CGContext(data: &buf, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: bpr, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return [] }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var out: [RGB] = []; out.reserveCapacity(w * h)
+        for i in 0..<(w * h) {
+            let o = i * 4
+            out.append(RGB(r: Int(buf[o]), g: Int(buf[o + 1]), b: Int(buf[o + 2])))
         }
         return out
+    }
+
+    /// Sample every pixel in a screen rectangle, in sRGB. Returns row-major list.
+    public static func sampleRegion(_ rect: CGRect) -> [RGB] {
+        guard let image = CGWindowListCreateImage(rect, .optionAll, kCGNullWindowID, []) else { return [] }
+        return sRGBPixels(of: image)
     }
 
     /// Fraction of pixels (0…1) that differ between two equal-length pixel
@@ -85,31 +93,19 @@ public enum PixelColor {
         return Double(differing) / Double(a.count)
     }
 
-    /// Load a PNG into a flat RGB array (for reference-image comparison).
+    /// Load a PNG into a flat sRGB RGB array (for reference-image comparison).
+    /// Normalized through the same sRGB path as live captures so the two compare
+    /// in one color space.
     public static func loadPNG(_ path: String) -> [RGB]? {
         guard let img = NSImage(contentsOfFile: path),
-              let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let data = cg.dataProvider?.data,
-              let ptr = CFDataGetBytePtr(data) else { return nil }
-        let w = cg.width, h = cg.height, bpr = cg.bytesPerRow, bpp = cg.bitsPerPixel / 8
-        var out: [RGB] = []; out.reserveCapacity(w * h)
-        for y in 0..<h { for x in 0..<w {
-            let o = y * bpr + x * bpp
-            // CGImage from NSImage PNG is typically RGBA.
-            out.append(RGB(r: Int(ptr[o]), g: Int(ptr[o + 1]), b: Int(ptr[o + 2])))
-        } }
-        return out
+              let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return sRGBPixels(of: cg)
     }
 
-    /// Read the color of a single screen pixel at `point` (screen coordinates),
-    /// or nil if the capture failed. Captures a 1×1 region for efficiency.
+    /// Read the sRGB color of a single screen pixel at `point`, or nil on failure.
     public static func sample(at point: CGPoint) -> RGB? {
         let rect = CGRect(x: point.x, y: point.y, width: 1, height: 1)
-        guard let image = CGWindowListCreateImage(rect, .optionAll, kCGNullWindowID, []),
-              let data = image.dataProvider?.data,
-              let ptr = CFDataGetBytePtr(data) else { return nil }
-        // CGWindowListCreateImage is BGRA on macOS.
-        let b = Int(ptr[0]); let g = Int(ptr[1]); let r = Int(ptr[2])
-        return RGB(r: r, g: g, b: b)
+        guard let image = CGWindowListCreateImage(rect, .optionAll, kCGNullWindowID, []) else { return nil }
+        return sRGBPixels(of: image).first
     }
 }

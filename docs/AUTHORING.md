@@ -533,12 +533,11 @@ lets you verify them by sampling a screen pixel's color.
   theme/display differences mean the exact pixel is rarely the exact hex. Pick a
   sample point in the *solid interior* of the colored glyph/region, not its edge.
 
-> **Color-space caveat (important):** screen capture returns pixels in the
-> **display's color space** (e.g. Display P3 on modern Macs), *not* the sRGB your
-> app draws in. So an sRGB `#3478F6` can read back as a noticeably different hex on
-> a wide-gamut display. **Don't use your app's source color value** — instead run
-> the assertion once, read the `actual` hex from the failure report, and use that
-> (with tolerance). Or use a generous tolerance that spans the gap.
+> **Color space:** captured pixels are **normalized to sRGB**, so you can use
+> your app's source **sRGB** `#RRGGBB` values directly — they match within a
+> tight tolerance even on a wide-gamut (Display P3) screen. (If your app draws in
+> a non-sRGB space, or the color is theme/transparency-dependent, still prefer
+> reading the `actual` hex from a first run and asserting that.)
 
 **Limits:** exact hues are display- and theme-dependent; assert representative
 points with tolerance, not pixel-perfect equality. **Sampling a thin,

@@ -188,14 +188,12 @@ import ApplicationServices
             steps: [
                 Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
                      args: { var a = ActionArgs(); a.present = true; return a }()),
-                // dominant mode over the solid swatch. Tolerance is wide (60)
-                // because screen capture returns pixels in the DISPLAY color space,
-                // not the sRGB the swatch was drawn in — on a wide-gamut display
-                // sRGB #3478F6 reads as a lighter blue. (See the color-space caveat
-                // in AUTHORING.md §13.) The test still rejects any non-blue region.
+                // dominant mode over the solid swatch. Captured pixels are
+                // normalized to sRGB, so the swatch's sRGB #3478F6 matches within
+                // a tight tolerance even on a wide-gamut display.
                 Step(id: "region", action: .assertRegion, target: Selector(identifier: "colorSwatch"),
                      args: { var a = ActionArgs(); a.color = "#3478F6"; a.width = 12; a.height = 12
-                             a.mode = "dominant"; a.tolerance = 60; return a }()),
+                             a.mode = "dominant"; a.tolerance = 16; return a }()),
                 Step(id: "quit", action: .terminate),
             ]
         )

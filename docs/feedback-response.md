@@ -4,9 +4,14 @@
 report from authoring and running an 18-plan GUI suite against AutoPilot at commit
 `3d7b5cb`.
 
-**Status of this document:** triage / disposition only. No code has been changed
-yet. Every claim below was re-verified against AutoPilot source before being
-accepted; the report was found accurate on every point checked.
+**Status of this document:** triage / disposition. **UPDATE: now implemented.**
+Every accepted item below has since been built (see git history and
+`AUTHORING.md`): both P0s (poll asserts, activate app), press/menu actions,
+full key map, ambiguous-match listing, unsupported-key error, summary line,
+`dump_axtree` filter, plus the new capabilities from the coverage report
+(menu-mark read, type commit/clear, drag, pixel-color assertion). Every claim
+was re-verified against source before being accepted; the report was accurate
+on every point checked.
 
 **Verification note:** all file:line references in the report were confirmed
 against the current source. Notably, P0 #1 independently rediscovers the exact

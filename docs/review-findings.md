@@ -7,6 +7,10 @@ field report (`medit:docs/autopilot-feedback.md`) and its triage
 log. Every item cites a verified file:line.
 
 **Reviewed at commit:** `6ccbeea` (post-triage).
+**UPDATE: implemented.** A1 (truncation signal), A2 (count short-circuit), A3
+(per-plan artifact namespacing), A4 (error/fail semantics), A5 (vision path vs
+plan dir) are all built; D1–D5 doc gaps are addressed in `AUTHORING.md`. A6
+(sync-only core) remains deferred until parallel execution is a goal.
 
 Severity: **P0** correctness/data-loss · **P1** real but bounded · **P2**
 papercut/architectural.

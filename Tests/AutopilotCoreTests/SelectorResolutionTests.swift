@@ -46,6 +46,34 @@ import Foundation
     @Test func unknownKeyThrows() {
         #expect(throws: Error.self) { _ = try ActionEngine.parseChord("cmd+£") }
     }
+
+    @Test func parsesCmdComma() throws {
+        // The single most common macOS shortcut (Preferences) — previously rejected.
+        let chord = try ActionEngine.parseChord("cmd+,")
+        #expect(chord.flags.contains(.maskCommand))
+        #expect(chord.virtualKey == 43) // ANSI comma
+    }
+
+    @Test func parsesPunctuationByNameAndSymbol() throws {
+        #expect(try ActionEngine.parseChord(".").virtualKey == 47)
+        #expect(try ActionEngine.parseChord("period").virtualKey == 47)
+        #expect(try ActionEngine.parseChord("/").virtualKey == 44)
+        #expect(try ActionEngine.parseChord("slash").virtualKey == 44)
+    }
+
+    @Test func escapeHasCorrectKeycode() throws {
+        // Regression: escape was previously mis-mapped to 27 (the minus key).
+        #expect(try ActionEngine.parseChord("escape").virtualKey == 53)
+        #expect(try ActionEngine.parseChord("minus").virtualKey == 27)
+        #expect(try ActionEngine.parseChord("-").virtualKey == 27)
+    }
+
+    @Test func parsesNavigationAndFunctionKeys() throws {
+        #expect(try ActionEngine.parseChord("home").virtualKey == 115)
+        #expect(try ActionEngine.parseChord("pagedown").virtualKey == 121)
+        #expect(try ActionEngine.parseChord("f1").virtualKey == 122)
+        #expect(try ActionEngine.parseChord("cmd+f12").flags.contains(.maskCommand))
+    }
 }
 
 @Suite struct VisionMatchTests {

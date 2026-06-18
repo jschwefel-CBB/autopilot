@@ -196,3 +196,19 @@ Corroborated finding: **`press` (AX press) is more robust than a coordinate
 `click`** for small controls — our own checkbox integration test had to switch
 from `click` to `press` to reliably toggle the box. This matches the agent's
 report and is documented in the troubleshooting table.
+
+---
+
+## Round 3 (post-Round-2-retest) — disposition
+
+The medit Round-2 retest confirmed both fixes and left **one residue**, now also
+fixed:
+
+| Finding | Severity | Verified | Decision |
+|---|---|---|---|
+| `type focus:false` lands nothing in an `NSSearchField` | P2 | ✅ confirmed — `type` used `keyboardSetUnicodeString`, which the search field's child field editor ignores | **FIXED** — `type` now sends printable characters as virtual-key events (shared `KeyMap`), falling back to unicode-string only for non-ANSI chars. Verified: `type focus:false` into an `NSSearchField` lands text. |
+
+Net result across all three rounds: every code-level finding the medit consumer
+filed has been verified against source and fixed; the remaining items are
+documented limitations (assertPixel on thin glyphs; `marked` needs the menu
+opened; file drag-drop unsupported; non-ANSI characters via fallback).

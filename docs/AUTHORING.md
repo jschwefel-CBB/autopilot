@@ -114,6 +114,66 @@ Each step is one action. Common shape:
 | `assertPixel` | optional | `color` (+ point) | Asserts a screen pixel's color (for visual features AX can't see — bracket colors, gutters). See §4. |
 | `wait` | no | `seconds` | Fixed delay. **Discouraged** — prefer `waitFor`. Use only as a last resort. |
 
+### Worked examples for each action
+
+```jsonc
+// click / press — press is more robust on small controls (checkboxes, etc.)
+{ "id": "ok",     "action": "click", "target": { "identifier": "okButton" } }
+{ "id": "toggle", "action": "press", "target": { "identifier": "flagCheckbox" } }
+
+// menu — the ONLY way to drive a command with no key equivalent
+{ "id": "rainbow", "action": "menu", "args": { "menuPath": ["View", "Rainbow Brackets"] } }
+
+// type — plain, then the variants
+{ "id": "t1", "action": "type", "target": { "identifier": "editorTextView" },
+  "args": { "text": "hello\nworld" } }
+// into a field the app already focused (search/rename): skip the focus-click.
+// type sends virtual-key events, so it works on NSSearchField (whose editing
+// happens in a child field editor) — no need for keyPress-per-character.
+{ "id": "t2", "action": "type", "target": { "identifier": "searchField" },
+  "args": { "text": "query", "focus": false } }
+// replace a field's contents and commit (inline rename): clear, type, press Return
+{ "id": "t3", "action": "type", "target": { "identifier": "renameField" },
+  "args": { "text": "newname.txt", "clear": true, "commit": true } }
+
+// keyPress — chords incl. punctuation
+{ "id": "find",  "action": "keyPress", "target": { "identifier": "editorTextView" },
+  "args": { "keys": "cmd+f" } }
+{ "id": "prefs", "action": "keyPress", "target": { "identifier": "editorTextView" },
+  "args": { "keys": "cmd+," } }
+
+// drag — element to element (file drag-drop is NOT supported; see below)
+{ "id": "move", "action": "drag", "target": { "identifier": "fileRow" },
+  "args": { "to": { "identifier": "folderRow" } } }
+
+// scroll
+{ "id": "down", "action": "scroll", "target": { "identifier": "editorTextView" },
+  "args": { "deltaY": -300 } }
+
+// setValue — sets the AX value directly, but fires NO action/end-editing.
+// Use it for fast field population; use `type` with "commit" when the commit matters.
+{ "id": "fill", "action": "setValue", "target": { "identifier": "nameField" },
+  "args": { "text": "draft" } }
+
+// assert: a property, presence, or a menu checkmark
+{ "id": "count",   "action": "assert", "target": { "identifier": "countLabel" },
+  "assert": { "property": "value", "op": "contains", "expected": "count: 1" } }
+{ "id": "checked", "action": "assert", "target": { "identifier": "wrapMenuItem" },
+  "assert": { "property": "marked", "op": "equals", "expected": "true" } }
+{ "id": "barGone", "action": "assert", "target": { "identifier": "findField" },
+  "assert": { "property": "exists", "op": "notExists" } }
+
+// waitFor (appear / disappear) and screenshot
+{ "id": "appear", "action": "waitFor", "target": { "identifier": "sheet" },
+  "args": { "present": true } }
+{ "id": "snap",   "action": "screenshot", "args": { "path": "/tmp/state.png" } }
+```
+
+> **`marked` caveat:** menu checkmark state (`AXMenuItemMarkChar`) is not
+> populated until the menu has been opened/validated by AppKit. A cold read
+> returns `false`. Open the menu first (a `menu` step), or prefer asserting the
+> toggle's **side effect** instead of its checkmark.
+
 `args` fields (only the relevant ones are read per action):
 
 | Field | Type | Used by |
@@ -599,7 +659,8 @@ alternative:
 | a menu item "click" passes but nothing happens | `click` can't open a closed menu | use the `menu` action instead |
 | `setValue` then Return doesn't commit | `setValue` fires no action | use `type` with `"commit": true` |
 | keystrokes dropped on the first step | (mitigated) app not yet key | the runner now activates + waits; ensure a `waitFor` window step first |
-| `type` into a search/rename field types nothing | type's focus-click dropped the app's existing first-responder | use `"focus": false` (the app already focused it) — or `keyPress` per character |
+| `type` into a search/rename field types nothing | type's focus-click dropped the app's existing first-responder | use `"focus": false` (the app already focused it). `type` sends virtual-key events, so search fields (`NSSearchField`) work too |
+| non-ANSI characters (accents, emoji) don't type | only ANSI keys have virtual keycodes | those fall back to unicode-string synthesis automatically; if a field editor rejects them, that's a known limit |
 | `assert value` on a checkbox reads empty | (fixed) numeric AXValue | now returns `"0"`/`"1"`; ensure you're on a current build |
 | `assert marked` reads `false` on a fresh menu | menu state isn't populated until the menu is opened/validated | open the menu (or prefer asserting the toggle's side effect) |
 | coordinate `click` on a small control does nothing | the click missed the hit-area | use `press` (AX press) — robust for checkboxes, buttons, menu items |

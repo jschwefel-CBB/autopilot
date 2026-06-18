@@ -19,6 +19,17 @@ public struct Reporter {
         return url
     }
 
+    /// A single machine-greppable summary line, e.g.
+    /// `RESULT pass 4/4` or `RESULT fail 3/4 (failed: assert-x)`.
+    public func summaryLine(_ report: Report) -> String {
+        let total = report.steps.count
+        let passed = report.steps.filter { $0.result == .pass }.count
+        let failed = report.steps.filter { $0.result != .pass }.map(\.id)
+        var line = "RESULT \(report.result.rawValue) \(passed)/\(total)"
+        if !failed.isEmpty { line += " (failed: \(failed.joined(separator: ",")))" }
+        return line
+    }
+
     /// One-line-per-step human summary for stdout.
     public func humanSummary(_ report: Report) -> String {
         var lines = ["Plan: \(report.plan)  =>  \(report.result.rawValue.uppercased())  (\(report.durationMs)ms)"]

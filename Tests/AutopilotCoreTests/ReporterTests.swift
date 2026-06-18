@@ -25,4 +25,20 @@ import Foundation
         report.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
         #expect(report.result == .pass)
     }
+
+    @Test func summaryLinePass() {
+        var report = Report(plan: "p")
+        report.add(StepResult(id: "a", result: .pass, durationMs: 1))
+        report.add(StepResult(id: "b", result: .pass, durationMs: 1))
+        report.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        #expect(Reporter().summaryLine(report) == "RESULT pass 2/2")
+    }
+
+    @Test func summaryLineFailNamesFailures() {
+        var report = Report(plan: "p")
+        report.add(StepResult(id: "ok", result: .pass, durationMs: 1))
+        report.add(StepResult(id: "bad", result: .fail, durationMs: 1))
+        report.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        #expect(Reporter().summaryLine(report) == "RESULT fail 1/2 (failed: bad)")
+    }
 }

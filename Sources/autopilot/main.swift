@@ -51,6 +51,10 @@ struct Run: ParsableCommand {
         } else {
             print(reporter.humanSummary(report))
         }
+        // Always emit a single machine-greppable summary line on stderr, so shell
+        // loops can read it without parsing the human summary or report.json,
+        // and without colliding with --json stdout.
+        FileHandle.standardError.write(Data((reporter.summaryLine(report) + "\n").utf8))
 
         // Distinct exit codes.
         if report.permissions?.accessibility == false { throw ExitCode(3) }

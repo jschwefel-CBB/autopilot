@@ -75,6 +75,32 @@ public enum PixelColor {
         return out
     }
 
+    /// Fraction of pixels (0…1) that differ between two equal-length pixel
+    /// arrays by more than `perPixelTolerance` (RGB distance). Mismatched
+    /// lengths return 1.0 (completely different).
+    public static func diffFraction(_ a: [RGB], _ b: [RGB], perPixelTolerance: Double) -> Double {
+        guard a.count == b.count, !a.isEmpty else { return 1.0 }
+        var differing = 0
+        for i in a.indices where distance(a[i], b[i]) > perPixelTolerance { differing += 1 }
+        return Double(differing) / Double(a.count)
+    }
+
+    /// Load a PNG into a flat RGB array (for reference-image comparison).
+    public static func loadPNG(_ path: String) -> [RGB]? {
+        guard let img = NSImage(contentsOfFile: path),
+              let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let data = cg.dataProvider?.data,
+              let ptr = CFDataGetBytePtr(data) else { return nil }
+        let w = cg.width, h = cg.height, bpr = cg.bytesPerRow, bpp = cg.bitsPerPixel / 8
+        var out: [RGB] = []; out.reserveCapacity(w * h)
+        for y in 0..<h { for x in 0..<w {
+            let o = y * bpr + x * bpp
+            // CGImage from NSImage PNG is typically RGBA.
+            out.append(RGB(r: Int(ptr[o]), g: Int(ptr[o + 1]), b: Int(ptr[o + 2])))
+        } }
+        return out
+    }
+
     /// Read the color of a single screen pixel at `point` (screen coordinates),
     /// or nil if the capture failed. Captures a 1×1 region for efficiency.
     public static func sample(at point: CGPoint) -> RGB? {

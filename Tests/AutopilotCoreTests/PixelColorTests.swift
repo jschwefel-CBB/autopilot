@@ -31,6 +31,20 @@ import Foundation
         #expect(PixelColor.average(of: []) == nil)
     }
 
+    @Test func diffFractionCountsDifferingPixels() {
+        let base = Array(repeating: PixelColor.RGB(r: 10, g: 10, b: 10), count: 10)
+        var changed = base
+        changed[0] = PixelColor.RGB(r: 200, g: 200, b: 200)  // 1 of 10 very different
+        #expect(PixelColor.diffFraction(base, changed, perPixelTolerance: 10) == 0.1)
+        #expect(PixelColor.diffFraction(base, base, perPixelTolerance: 10) == 0.0)
+    }
+
+    @Test func diffFractionMismatchedLengthsIsFullyDifferent() {
+        let a = [PixelColor.RGB(r: 0, g: 0, b: 0)]
+        let b = [PixelColor.RGB(r: 0, g: 0, b: 0), PixelColor.RGB(r: 0, g: 0, b: 0)]
+        #expect(PixelColor.diffFraction(a, b, perPixelTolerance: 0) == 1.0)
+    }
+
     @Test func dominantIgnoresAntiAliasMinority() {
         // 8 gold pixels + 2 near-black edge pixels → dominant ≈ gold, not the
         // average (which the edge pixels would pull down).

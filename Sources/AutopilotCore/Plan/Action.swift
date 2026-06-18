@@ -10,6 +10,7 @@ public enum Action: String, Codable, Sendable {
     case drag           // drag from a source element/point to a destination
     case assertPixel    // assert a screen pixel's color (visual features AX can't see)
     case assertRegion   // assert the average/dominant color over a rectangle (robust for glyphs)
+    case snapshot       // capture a region; write a reference on first run, diff on later runs
     case waitFor, screenshot, assert
     case wait   // explicit, discouraged fixed delay
 }
@@ -38,8 +39,10 @@ public struct ActionArgs: Codable, Equatable, Sendable {
     public var atY: Int?
     public var color: String?         // expected "#RRGGBB"
     public var tolerance: Double?     // RGB distance tolerance (default 16)
-    public var width: Int?            // assertRegion: rectangle size
+    public var width: Int?            // assertRegion/snapshot: rectangle size
     public var height: Int?
     public var mode: String?          // assertRegion: "average" (default) or "dominant"
+    public var reference: String?     // snapshot: reference PNG path (written on first run)
+    public var maxDiff: Double?       // snapshot: max allowed differing-pixel fraction (default 0.02)
     public init() {}
 }

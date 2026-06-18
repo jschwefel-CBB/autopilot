@@ -131,6 +131,9 @@ public struct PlanRunner {
         case .assertRegion:
             return try runAssertRegion(step, app: app, targeting: targeting,
                                        timeoutMs: timeoutMs, intervalMs: intervalMs, options: options)
+        case .snapshot:
+            return try runSnapshot(step, app: app, targeting: targeting,
+                                   timeoutMs: timeoutMs, intervalMs: intervalMs, options: options)
         case .menu:
             guard let path = step.args?.menuPath, !path.isEmpty else {
                 throw PlanError.decode("menu needs args.menuPath")
@@ -296,6 +299,58 @@ public struct PlanRunner {
             result.screenshot = shot
         }
         return result
+    }
+
+    /// Region snapshot test: capture a rectangle; if no reference exists yet,
+    /// write it and pass (baseline established). Otherwise compare and fail if
+    /// more than `maxDiff` of pixels differ.
+    private func runSnapshot(_ step: Step, app: AXUIElement, targeting: Targeting,
+                             timeoutMs: Int, intervalMs: Int, options: RunOptions) throws -> StepResult {
+        let args = step.args
+        guard let refRel = args?.reference else {
+            throw PlanError.decode("snapshot needs args.reference (path to the reference PNG)")
+        }
+        // Resolve the reference relative to the plan dir (like include/vision).
+        let refPath = (options.planBaseDir.map { Targeting.resolveImagePath(refRel, baseDir: $0) }) ?? refRel
+        let maxDiff = args?.maxDiff ?? 0.02
+        let w = args?.width ?? 64, h = args?.height ?? 32
+
+        let center: CGPoint
+        if let ax = step.target {
+            let ref = try targeting.resolve(ax, app: app, timeoutMs: timeoutMs,
+                                            intervalMs: intervalMs, baseDir: options.planBaseDir)
+            guard let c = actions.point(for: ref) else { throw PlanError.decode("snapshot target has no point") }
+            center = CGPoint(x: c.x + CGFloat(args?.offsetX ?? 0), y: c.y + CGFloat(args?.offsetY ?? 0))
+        } else if let ax = args?.atX, let ay = args?.atY {
+            center = CGPoint(x: ax, y: ay)
+        } else {
+            throw PlanError.decode("snapshot needs a target or absolute at(X,Y)")
+        }
+        let rect = CGRect(x: center.x - CGFloat(w) / 2, y: center.y - CGFloat(h) / 2,
+                          width: CGFloat(w), height: CGFloat(h))
+
+        // First run: establish the baseline.
+        if !FileManager.default.fileExists(atPath: refPath) {
+            try? FileManager.default.createDirectory(
+                at: URL(fileURLWithPath: refPath).deletingLastPathComponent(), withIntermediateDirectories: true)
+            let ok = Screenshot.captureRegion(rect, to: refPath)
+            return StepResult(id: step.id, result: ok ? .pass : .error, durationMs: 0,
+                              message: ok ? "reference written: \(refPath)" : "failed to write reference")
+        }
+
+        // Subsequent runs: capture live and diff against the reference.
+        let livePath = options.artifactsDir.appendingPathComponent("\(step.id).live.png").path
+        try? FileManager.default.createDirectory(at: options.artifactsDir, withIntermediateDirectories: true)
+        guard Screenshot.captureRegion(rect, to: livePath),
+              let live = PixelColor.loadPNG(livePath),
+              let ref = PixelColor.loadPNG(refPath) else {
+            return StepResult(id: step.id, result: .error, durationMs: 0, message: "snapshot capture/load failed")
+        }
+        let frac = PixelColor.diffFraction(ref, live, perPixelTolerance: 24)
+        let ok = frac <= maxDiff
+        return StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
+                          expected: "≤\(maxDiff) diff", actual: String(format: "%.3f diff", frac),
+                          screenshot: ok ? nil : livePath)
     }
 
     private func writeAXDump(_ app: AXUIElement, stepId: String, dir: URL) -> String? {

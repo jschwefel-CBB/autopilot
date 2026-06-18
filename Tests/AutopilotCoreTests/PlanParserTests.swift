@@ -74,4 +74,45 @@ import Foundation
         let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
         #expect(plan.steps.count == 1)
     }
+
+    @Test func dragNeedsToOrToFiles() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"d","action":"drag","target":{"identifier":"src"}}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func dragWithDestinationIsValid() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"d","action":"drag","target":{"identifier":"src"},
+                   "args":{"to":{"identifier":"dst"}}}]}
+        """.data(using: .utf8)!
+        let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        #expect(plan.steps[0].args?.to?.identifier == "dst")
+    }
+
+    @Test func menuNeedsMenuPath() throws {
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"m","action":"menu"}]}
+        """.data(using: .utf8)!
+        #expect(throws: PlanError.self) {
+            _ = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        }
+    }
+
+    @Test func assertPixelNeedsColor() throws {
+        // assertPixel doesn't require a target, but runtime needs args.color;
+        // parser accepts it (color is checked at run time), so this parses fine.
+        let json = """
+        {"schemaVersion":"1.0","name":"x","target":{"bundleId":"a"},
+         "steps":[{"id":"p","action":"assertPixel","args":{"atX":10,"atY":10,"color":"#FF0000"}}]}
+        """.data(using: .utf8)!
+        let plan = try PlanParser().parse(data: json, baseDirectory: URL(fileURLWithPath: "/tmp"))
+        #expect(plan.steps[0].args?.color == "#FF0000")
+    }
 }

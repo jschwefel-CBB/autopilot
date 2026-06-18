@@ -135,10 +135,18 @@ public struct PlanRunner {
             try MenuNavigator().selectPath(path, app: app)
             return StepResult(id: step.id, result: .pass, durationMs: 0)
         case .drag:
+            // File drag-and-drop (dragging external files onto a control) cannot
+            // be synthesized with mouse events — it requires a real NSPasteboard
+            // drag session the OS originates. Fail clearly rather than no-op.
+            if step.args?.toFiles != nil {
+                return StepResult(id: step.id, result: .error, durationMs: 0,
+                    message: "file drag-and-drop is not supported via synthesized events; " +
+                             "open files with target.launchFiles instead, or test the drop handler headlessly")
+            }
             let ref = try targeting.resolve(step.target!, app: app,
                                             timeoutMs: timeoutMs, intervalMs: intervalMs,
                                             baseDir: options.planBaseDir)
-            guard let dest = step.args?.to else { throw PlanError.decode("drag needs args.to") }
+            guard let dest = step.args?.to else { throw PlanError.decode("drag needs args.to or args.toFiles") }
             let destRef = try targeting.resolve(dest, app: app,
                                                 timeoutMs: timeoutMs, intervalMs: intervalMs,
                                                 baseDir: options.planBaseDir)

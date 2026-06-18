@@ -103,7 +103,7 @@ Each step is one action. Common shape:
 | `rightClick` | **yes** | no | Right click. |
 | `press` | **yes** | no | Performs the AX **press** action on the element. More robust than a coordinate click, and works for elements with no clickable frame. Prefer for buttons. |
 | `menu` | no | `menuPath` | Walks the menu bar by title path (e.g. `["View","Rainbow Brackets"]`) and invokes the item. **The only way to drive a menu command with no key equivalent** — a `click` cannot open a closed menu. |
-| `type` | **yes** | `text` (+ `clear`/`commit`) | Clicks the element to focus, then types `text`. `clear:true` selects-all+deletes first; `commit:true` presses Return after, firing end-editing (use for inline-rename fields). |
+| `type` | **yes** | `text` (+ `clear`/`commit`/`focus`) | Clicks the element to focus, then types `text`. `clear:true` selects-all+deletes first; `commit:true` presses Return after, firing end-editing (inline-rename fields). **`focus:false`** skips the focus-click — required for fields the app already focused (search fields, opened rename fields), where a click would drop focus. |
 | `keyPress` | **yes** | `keys` | Sends a key chord, e.g. `"cmd+f"`, `"cmd+,"` (see §5). |
 | `setValue` | **yes** (AX element) | `text` | Sets the element's AX value directly (no keystrokes). Does **not** fire the control's action / end-editing — use `type` with `commit` where the *commit* matters. |
 | `scroll` | **yes** | `deltaX`/`deltaY` | Scrolls by the given pixel deltas. |
@@ -121,6 +121,7 @@ Each step is one action. Common shape:
 | `text` | string | `type`, `setValue` |
 | `clear` | bool | `type` (select-all + delete before typing) |
 | `commit` | bool | `type` (press Return after, to fire end-editing) |
+| `focus` | bool | `type` (default true; false = don't focus-click, for already-focused fields) |
 | `keys` | string | `keyPress` (e.g. `"shift+cmd+a"`) |
 | `menuPath` | [string] | `menu` (e.g. `["View","Toggle Flag"]`) |
 | `to` | selector | `drag` (destination element) |
@@ -469,8 +470,16 @@ lets you verify them by sampling a screen pixel's color.
   sample point in the *solid interior* of the colored glyph/region, not its edge.
 
 **Limits:** exact hues are display- and theme-dependent; assert representative
-points with tolerance, not pixel-perfect equality. For dense visual checks,
-screenshot snapshot-testing in the app's own test suite is still the better tool.
+points with tolerance, not pixel-perfect equality. **Sampling a thin,
+anti-aliased glyph (e.g. one colored bracket character) is fragile** — the colored
+pixels are a few px wide, surrounded by blended edge pixels, so a single-point
+sample easily lands on the wrong color. `assertPixel` is reliable for **solid
+fills** (a selected row, a colored bar, a filled swatch) but not for hunting a
+specific glyph's color. For per-glyph color verification (syntax highlighting,
+rainbow brackets), prefer snapshot-testing in the app's own test suite; treat
+those as a manual/visual check otherwise. (Real-world note: a medit
+rainbow-bracket color test was attempted and deliberately *not* shipped for this
+reason.)
 
 ---
 
@@ -590,6 +599,10 @@ alternative:
 | a menu item "click" passes but nothing happens | `click` can't open a closed menu | use the `menu` action instead |
 | `setValue` then Return doesn't commit | `setValue` fires no action | use `type` with `"commit": true` |
 | keystrokes dropped on the first step | (mitigated) app not yet key | the runner now activates + waits; ensure a `waitFor` window step first |
+| `type` into a search/rename field types nothing | type's focus-click dropped the app's existing first-responder | use `"focus": false` (the app already focused it) — or `keyPress` per character |
+| `assert value` on a checkbox reads empty | (fixed) numeric AXValue | now returns `"0"`/`"1"`; ensure you're on a current build |
+| `assert marked` reads `false` on a fresh menu | menu state isn't populated until the menu is opened/validated | open the menu (or prefer asserting the toggle's side effect) |
+| coordinate `click` on a small control does nothing | the click missed the hit-area | use `press` (AX press) — robust for checkboxes, buttons, menu items |
 
 ---
 

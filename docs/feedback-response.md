@@ -175,3 +175,24 @@ The report's "keep it" list matches our intent and is accepted wholesale:
 5. Re-evaluate the deferred items against real usage.
 
 — end of response
+
+---
+
+## Round 2 (post-retest) — disposition
+
+After the fixes above, the medit agent re-ran the full suite (18/18) and filed a
+Round 2 addendum. Both code-level findings were re-verified against source and
+fixed:
+
+| Finding | Severity | Verified | Decision |
+|---|---|---|---|
+| `type`'s focus-click drops focus on already-focused fields (search/rename) | P0 | ✅ `ActionEngine.swift` (unconditional focus click) | **FIXED** — added `type` `focus:false` |
+| Checkbox `AXValue` (NSNumber) unreadable via `value` (`string()` returns nil) | P1 | ✅ `AXTree.string` did `value as? String` | **FIXED** — `AXTree.valueString` coerces numeric values |
+| `marked` reads `false` until the menu is opened/validated | P2 | plausible (AppKit validates lazily) | **DOC** — documented; prefer asserting the side effect |
+| Back-to-back re-toggle of the same menu item is unreliable | P2 | plausible | **DOC/DEFER** — note the limitation; revisit if needed |
+| `assertPixel` too fragile for thin anti-aliased glyphs (bracket colors) | — | confirmed (by design) | **DOC** — documented as a limitation; reliable for solid fills only |
+
+Corroborated finding: **`press` (AX press) is more robust than a coordinate
+`click`** for small controls — our own checkbox integration test had to switch
+from `click` to `press` to reliably toggle the box. This matches the agent's
+report and is documented in the troubleshooting table.

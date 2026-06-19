@@ -40,7 +40,7 @@ public struct AppLauncher {
         // Wait for any already-running instance of the same app to exit first, so
         // back-to-back plans (a suite) never race a fresh launch against a prior
         // instance's teardown — which otherwise drops the first input step.
-        waitForExistingInstancesToExit(of: url, timeout: 3.0)
+        waitForExistingInstancesToExit(of: url, bundleId: target.bundleId, timeout: 3.0)
         let config = NSWorkspace.OpenConfiguration()
         if let args = target.launchArgs { config.arguments = args }
         let fileURLs = (target.launchFiles ?? []).map { URL(fileURLWithPath: $0) }
@@ -127,19 +127,36 @@ public struct AppLauncher {
 
     /// Block until no running application shares `url`'s bundle, or the timeout
     /// elapses (then forcibly terminate stragglers so the next launch is clean).
-    func waitForExistingInstancesToExit(of url: URL, timeout: TimeInterval) {
+    func waitForExistingInstancesToExit(of url: URL, bundleId: String?, timeout: TimeInterval) {
+        // Match the same way attach() does — standardized URL OR bundle id — so a
+        // /var vs /private/var or trailing-slash mismatch doesn't make a still-
+        // running prior instance invisible (which would skip this teardown and
+        // re-introduce the back-to-back relaunch race).
         func instances() -> [NSRunningApplication] {
-            NSWorkspace.shared.runningApplications.filter { $0.bundleURL == url }
+            NSWorkspace.shared.runningApplications.filter {
+                $0.bundleURL?.standardizedFileURL == url.standardizedFileURL
+                    || (bundleId != nil && $0.bundleIdentifier == bundleId)
+            }
         }
+        let initial = instances()
+        guard !initial.isEmpty else { return }
+        // Killing pre-existing instances is the deterministic-relaunch mechanism,
+        // but it terminates the user's windows too — so make it visible.
+        FileHandle.standardError.write(Data(
+            "autopilot: terminating \(initial.count) existing instance(s) of \(url.lastPathComponent) for a clean relaunch\n".utf8))
         let deadline = Date().addingTimeInterval(timeout)
-        var running = instances()
+        var running = initial
         while !running.isEmpty, Date() < deadline {
             running.forEach { $0.terminate() }
             Thread.sleep(forTimeInterval: 0.1)
             running = instances()
         }
-        // Last resort: force-kill anything still up.
-        instances().forEach { $0.forceTerminate() }
+        let stragglers = instances()
+        if !stragglers.isEmpty {
+            FileHandle.standardError.write(Data(
+                "autopilot: force-terminating \(stragglers.count) unresponsive instance(s)\n".utf8))
+            stragglers.forEach { $0.forceTerminate() }
+        }
     }
 
     /// Bring the app frontmost and poll until it is active, so synthesized

@@ -82,8 +82,7 @@ public struct PlanRunner {
             } catch {
                 let dur = Int((clock.now() - start) * 1000)
                 let dump = writeAXDump(appElement, stepId: step.id, dir: options.artifactsDir)
-                let shot = options.artifactsDir.appendingPathComponent("\(step.id).png").path
-                Screenshot.captureMainDisplay(to: shot)
+                let shot = captureFailureShot(step.id, dir: options.artifactsDir)
                 // A targeting failure (element not found / ambiguous / timed out)
                 // means the app's UI wasn't as the plan expected — that's a test
                 // FAILURE. Everything else (launch failure, AX action failure,
@@ -99,7 +98,13 @@ public struct PlanRunner {
         report.artifactsDir = options.artifactsDir.path
         // Write report.json into the per-plan artifacts dir so it travels with
         // its screenshots/AX dumps and never clobbers another plan's report.
-        _ = try? reporter.write(report, to: options.artifactsDir)
+        // Surface a write failure (e.g. unwritable artifacts dir) instead of
+        // silently losing the report.
+        do { try reporter.write(report, to: options.artifactsDir) }
+        catch {
+            FileHandle.standardError.write(Data(
+                "autopilot: failed to write report.json to \(options.artifactsDir.path): \(error)\n".utf8))
+        }
         return report
     }
 
@@ -204,10 +209,8 @@ public struct PlanRunner {
         var result = StepResult(id: step.id, result: outcome.matched ? .pass : .fail, durationMs: 0,
                                 expected: expected, actual: outcome.actual)
         if !outcome.matched {
-            let dump = writeAXDump(app, stepId: step.id, dir: options.artifactsDir)
-            let shot = options.artifactsDir.appendingPathComponent("\(step.id).png").path
-            Screenshot.captureMainDisplay(to: shot)
-            result.axDump = dump; result.screenshot = shot
+            result.axDump = writeAXDump(app, stepId: step.id, dir: options.artifactsDir)
+            result.screenshot = captureFailureShot(step.id, dir: options.artifactsDir)
         }
         return result
     }
@@ -251,9 +254,7 @@ public struct PlanRunner {
         var result = StepResult(id: step.id, result: matched ? .pass : .fail, durationMs: 0,
                                 expected: "\(hex) ±\(Int(tolerance))", actual: actualHex)
         if !matched {
-            let shot = options.artifactsDir.appendingPathComponent("\(step.id).png").path
-            Screenshot.captureMainDisplay(to: shot)
-            result.screenshot = shot
+            result.screenshot = captureFailureShot(step.id, dir: options.artifactsDir)
         }
         return result
     }
@@ -300,9 +301,7 @@ public struct PlanRunner {
                                 expected: "\(hex) ±\(Int(tolerance)) (\(dominant ? "dominant" : "average"))",
                                 actual: actualHex)
         if !matched {
-            let shot = options.artifactsDir.appendingPathComponent("\(step.id).png").path
-            Screenshot.captureMainDisplay(to: shot)
-            result.screenshot = shot
+            result.screenshot = captureFailureShot(step.id, dir: options.artifactsDir)
         }
         return result
     }
@@ -372,6 +371,13 @@ public struct PlanRunner {
         return StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
                           expected: "≤\(maxDiff) diff", actual: String(format: "%.3f diff", frac),
                           screenshot: ok ? nil : livePath)
+    }
+
+    /// Capture a failure screenshot; return its path only if the write actually
+    /// succeeded, so the report never points at a file that doesn't exist.
+    private func captureFailureShot(_ stepId: String, dir: URL) -> String? {
+        let shot = dir.appendingPathComponent("\(stepId).png").path
+        return Screenshot.captureMainDisplay(to: shot) ? shot : nil
     }
 
     /// Visual actions require Screen Recording. If it's missing, return a clear

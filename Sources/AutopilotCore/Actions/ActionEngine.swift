@@ -112,7 +112,10 @@ public struct ActionEngine {
             }
         case .setValue:
             guard let text = args?.text, case .ax(let el)? = ref else { throw PlanError.decode("setValue needs AX element + text") }
-            AXUIElementSetAttributeValue(el, kAXValueAttribute as CFString, text as CFString)
+            let err = AXUIElementSetAttributeValue(el, kAXValueAttribute as CFString, text as CFString)
+            if err != .success {
+                throw PlanError.decode("setValue failed (AXError \(err.rawValue)); the element may not accept a value write")
+            }
         case .keyPress:
             guard let keys = args?.keys else { throw PlanError.decode("keyPress needs keys") }
             let chord = try Self.parseChord(keys)

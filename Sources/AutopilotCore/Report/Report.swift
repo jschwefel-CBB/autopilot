@@ -22,9 +22,11 @@ public struct StepResult: Codable, Sendable {
 
 public struct PermissionStatus: Codable, Sendable {
     public var accessibility: Bool
-    public var automation: Bool
-    public init(accessibility: Bool, automation: Bool) {
-        self.accessibility = accessibility; self.automation = automation
+    /// Whether Screen Recording is granted (a real, probed value — replaces the
+    /// former hardcoded `automation: true`, which was never checked).
+    public var screenRecording: Bool
+    public init(accessibility: Bool, screenRecording: Bool) {
+        self.accessibility = accessibility; self.screenRecording = screenRecording
     }
 }
 

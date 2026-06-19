@@ -8,7 +8,7 @@ import Foundation
         report.add(StepResult(id: "s1", result: .pass, durationMs: 12))
         report.add(StepResult(id: "s2", result: .fail, durationMs: 30,
                               expected: "2", actual: "1"))
-        report.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        report.finalize(permissions: PermissionStatus(accessibility: true, screenRecording: true))
 
         #expect(report.result == .fail) // any fail => overall fail
         let data = try JSONEncoder().encode(report)
@@ -22,7 +22,7 @@ import Foundation
     @Test func allPassYieldsPass() throws {
         var report = Report(plan: "p")
         report.add(StepResult(id: "a", result: .pass, durationMs: 1))
-        report.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        report.finalize(permissions: PermissionStatus(accessibility: true, screenRecording: true))
         #expect(report.result == .pass)
     }
 
@@ -30,7 +30,7 @@ import Foundation
         var report = Report(plan: "p")
         report.add(StepResult(id: "a", result: .pass, durationMs: 1))
         report.add(StepResult(id: "b", result: .pass, durationMs: 1))
-        report.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        report.finalize(permissions: PermissionStatus(accessibility: true, screenRecording: true))
         #expect(Reporter().summaryLine(report) == "RESULT pass 2/2")
     }
 
@@ -38,7 +38,7 @@ import Foundation
         var report = Report(plan: "p")
         report.add(StepResult(id: "ok", result: .pass, durationMs: 1))
         report.add(StepResult(id: "bad", result: .fail, durationMs: 1))
-        report.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        report.finalize(permissions: PermissionStatus(accessibility: true, screenRecording: true))
         #expect(Reporter().summaryLine(report) == "RESULT fail 1/2 (failed: bad)")
     }
 }

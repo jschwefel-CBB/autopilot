@@ -44,7 +44,7 @@ public struct PlanRunner {
 
         var report = Report(plan: plan.name)
         let hasAX = permissions.hasAccessibility()
-        let perm = PermissionStatus(accessibility: hasAX, automation: true)
+        let perm = PermissionStatus(accessibility: hasAX, screenRecording: permissions.hasScreenRecording())
 
         guard hasAX else {
             report.add(StepResult(id: "_preflight", result: .error, durationMs: 0,
@@ -190,6 +190,17 @@ public struct PlanRunner {
             return StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
                               expected: present ? "exists" : "notExists",
                               actual: ok ? (present ? "exists" : "notExists") : (present ? "notExists" : "exists"))
+        }
+        // `count` asserts the number of matching elements — relaxing the single-
+        // match rule so you can test collections ("5 results", "2 cart items").
+        if assertion.property == .count {
+            let expected = assertion.expected ?? ""
+            let outcome = assertions.pollEvaluate(
+                op: assertion.op, expected: expected,
+                timeoutMs: timeoutMs, intervalMs: intervalMs, clock: clock
+            ) { String(targeting.matchCount(step.target!, app: app)) }
+            return StepResult(id: step.id, result: outcome.matched ? .pass : .fail, durationMs: 0,
+                              expected: expected, actual: outcome.actual)
         }
         guard case .ax(let el) = try targeting.resolve(step.target!, app: app,
                                                        timeoutMs: timeoutMs, intervalMs: intervalMs,

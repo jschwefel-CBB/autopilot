@@ -60,11 +60,14 @@ public struct AssertionEngine {
         case .size:
             guard let f = AXTree.frame(element) else { return nil }
             return "\(Int(f.width)),\(Int(f.height))"
-        case .exists: return "true"
         case .marked:
             // A non-empty mark char (e.g. a checkmark) means the item is marked.
             let mark = AXTree.menuMarkChar(element) ?? ""
             return mark.isEmpty ? "false" : "true"
+        case .count:
+            // `count` is resolved by the runner against the whole subtree, not a
+            // single element — readProperty is never called for it.
+            return nil
         }
     }
 }

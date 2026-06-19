@@ -300,7 +300,7 @@ struct Run: ParsableCommand {
     static func errorReport(_ name: String, _ message: String) -> Report {
         var r = Report(plan: name)
         r.add(StepResult(id: "_plan", result: .error, durationMs: 0, message: message))
-        r.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        r.finalize(permissions: PermissionStatus(accessibility: true, screenRecording: true))
         return r
     }
 

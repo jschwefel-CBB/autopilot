@@ -236,6 +236,33 @@ import ApplicationServices
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent(refPath).path))
     }
 
+    @Test func countAssertionMatchesMultipleElements() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-count-\(UUID().uuidString)")
+        // TestHostApp's window has several AXButtons — count must be > 1, which a
+        // single-match assert could never express (it would throw 'ambiguous').
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: count assertion",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "count-buttons", action: .assert,
+                     target: Selector(role: "AXButton", within: Selector(role: "AXWindow")),
+                     assert: Assertion(property: .count, op: .greaterThan, expected: "1")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
     @Test func withinScopesPresenceChecks() async throws {
         guard AXIsProcessTrusted() else { return }
         let binary = testHostApp()
@@ -256,10 +283,10 @@ import ApplicationServices
                 Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
                      args: { var a = ActionArgs(); a.present = true; return a }()),
                 Step(id: "ok-not-in-menubar", action: .assert, target: withinMenuBar,
-                     assert: Assertion(property: .exists, op: .notExists)),
+                     assert: Assertion(property: .value, op: .notExists)),
                 // Sanity: okButton DOES exist unscoped.
                 Step(id: "ok-exists", action: .assert, target: Selector(identifier: "okButton"),
-                     assert: Assertion(property: .exists, op: .exists)),
+                     assert: Assertion(property: .value, op: .exists)),
                 Step(id: "quit", action: .terminate),
             ]
         )

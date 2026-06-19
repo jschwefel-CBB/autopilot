@@ -6,7 +6,7 @@ import Foundation
     func report(_ name: String, _ outcome: StepOutcome) -> Report {
         var r = Report(plan: name)
         r.add(StepResult(id: "s", result: outcome, durationMs: 10))
-        r.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        r.finalize(permissions: PermissionStatus(accessibility: true, screenRecording: true))
         return r
     }
 
@@ -41,7 +41,7 @@ import Foundation
 
     @Test func emptyStepsReportIsError() {
         var r = Report(plan: "no-steps")
-        r.finalize(permissions: PermissionStatus(accessibility: true, automation: true))
+        r.finalize(permissions: PermissionStatus(accessibility: true, screenRecording: true))
         #expect(r.result == .error)
     }
 }

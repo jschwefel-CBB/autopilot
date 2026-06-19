@@ -63,4 +63,10 @@ public struct Targeting {
             (axResolver.count(in: app, selector: selector) > 0) == present
         }
     }
+
+    /// The full number of elements matching `selector` (for count assertions);
+    /// uses a high stopAt so the count isn't capped at the presence threshold.
+    public func matchCount(_ selector: Selector, app: AXUIElement) -> Int {
+        axResolver.count(in: app, selector: selector, stopAt: .max)
+    }
 }

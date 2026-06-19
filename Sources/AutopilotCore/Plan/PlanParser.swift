@@ -3,6 +3,7 @@ import Foundation
 public struct PlanParser {
     public static let supportedSchemaVersion = "1.0"
     public static let maxIncludeDepth = 8
+    public static let maxSteps = 1000
 
     public init() {}
 
@@ -63,6 +64,11 @@ public struct PlanParser {
         }
         if (plan.target.bundleId?.isEmpty ?? true) && (plan.target.path?.isEmpty ?? true) {
             throw PlanError.invalidTarget("must set either bundleId or path")
+        }
+        // Bound plan size — a runaway/pathological plan shouldn't be able to
+        // pin a (single-threaded, serialized) MCP server indefinitely.
+        if plan.steps.count > Self.maxSteps {
+            throw PlanError.tooManySteps(count: plan.steps.count, max: Self.maxSteps)
         }
         var seen = Set<String>()
         for step in plan.steps {

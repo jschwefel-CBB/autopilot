@@ -10,6 +10,7 @@ public enum PlanError: Error, Equatable, CustomStringConvertible {
     case includeTooDeep(maxDepth: Int)
     case includeNotFound(path: String)
     case unsupportedKey(String)
+    case tooManySteps(count: Int, max: Int)
     case decode(String)
 
     public var description: String {
@@ -23,6 +24,7 @@ public enum PlanError: Error, Equatable, CustomStringConvertible {
         case .includeTooDeep(let d): return "Include nesting exceeds max depth \(d)"
         case .includeNotFound(let p): return "Included plan not found: \(p)"
         case .unsupportedKey(let k): return "Unsupported key in chord: \(k)"
+        case .tooManySteps(let c, let m): return "Plan has \(c) steps, exceeding the maximum of \(m)"
         case .decode(let m): return "Plan decode error: \(m)"
         }
     }

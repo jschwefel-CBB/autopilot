@@ -58,9 +58,14 @@ public enum AXTree {
         return arr
     }
 
-    /// The application-level AX element for a running process.
-    public static func application(pid: pid_t) -> AXUIElement {
-        AXUIElementCreateApplication(pid)
+    /// The application-level AX element for a running process. Sets a bounded
+    /// messaging timeout so AX IPC to a hung/beachballing target fails fast
+    /// (instead of blocking ~6s per call), making the plan's `timeoutMs`
+    /// meaningful. Children of this element inherit the timeout.
+    public static func application(pid: pid_t, messagingTimeout: Float = 2.0) -> AXUIElement {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, messagingTimeout)
+        return app
     }
 
     /// Perform the AX press action on an element (buttons, menu items, etc.).

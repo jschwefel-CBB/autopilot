@@ -10,6 +10,7 @@ Declarative macOS GUI testing via the Accessibility API. No LLM in the execution
 - Plans are deterministic contracts. The same plan plus the same app build produces the same result every run.
 - Targets UI elements by AX identifier, role, or title. Falls back to normalized cross-correlation template matching for custom-drawn controls the Accessibility API cannot see.
 - Asserts element properties, pixel colors, region colors, and snapshot diffs for full visual coverage.
+- Captures screenshots at any step — full display, cropped to a named element, or an absolute region. Add `captureTarget: true` to any step for a zero-overhead visual log on every run.
 - Runs a whole directory of plans in one command and produces an aggregate report.
 
 ## Install

@@ -10,6 +10,44 @@ every run.
 > `AutopilotMCP`) — those are technical identifiers and are intentionally left
 > as-is.
 
+## Install
+
+### Homebrew (recommended)
+
+```bash
+brew tap jschwefel-CBB/autopilot
+brew install autopilot
+```
+
+After install, grant **Accessibility** permission to Terminal (or whichever app runs `autopilot`) in System Settings → Privacy & Security → Accessibility. Run `autopilot doctor` to verify.
+
+### Direct download
+
+Download the latest `autopilot-<version>-<arch>.tar.gz` from the [Releases page](https://github.com/jschwefel-CBB/autopilot/releases), extract, and place both `autopilot` and `AutopilotMCP` somewhere on your `$PATH`:
+
+```bash
+tar -xzf autopilot-<version>-arm64.tar.gz
+sudo mv autopilot AutopilotMCP /usr/local/bin/
+```
+
+On first launch macOS may show a Gatekeeper warning — right-click the binary in Finder and choose Open, or run:
+
+```bash
+xattr -d com.apple.quarantine /usr/local/bin/autopilot
+xattr -d com.apple.quarantine /usr/local/bin/AutopilotMCP
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/jschwefel-CBB/autopilot.git
+cd autopilot
+swift build -c release
+# Binaries land in .build/release/autopilot and .build/release/AutopilotMCP
+```
+
+Requires Xcode 16+ (Swift 6 toolchain) and macOS 14+.
+
 ## What it does
 
 - Drives any macOS app: launch, click, **press**, **menu**, type, key chords,

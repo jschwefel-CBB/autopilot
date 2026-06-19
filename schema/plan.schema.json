@@ -262,6 +262,11 @@
         },
         "atY": {
           "type": "integer"
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Points of padding added around the element frame on all sides for screenshot / captureTarget captures."
         }
       }
     },
@@ -311,6 +316,10 @@
         "timeoutMs": {
           "type": "integer",
           "minimum": 0
+        },
+        "captureTarget": {
+          "type": "boolean",
+          "description": "When true, AutoPilot saves a cropped screenshot of the step's target element (pass or fail) alongside the normal full-display failure shot. Useful for building a visual log without explicit screenshot steps."
         }
       },
       "allOf": [

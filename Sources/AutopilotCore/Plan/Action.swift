@@ -44,5 +44,8 @@ public struct ActionArgs: Codable, Equatable, Sendable {
     public var mode: String?          // assertRegion: "average" (default) or "dominant"
     public var reference: String?     // snapshot: reference PNG path (written on first run)
     public var maxDiff: Double?       // snapshot: max allowed differing-pixel fraction (default 0.02)
+    /// screenshot / captureTarget: points of padding added around the element
+    /// frame on all sides. Preserves shadow/context that a pixel-tight crop hides.
+    public var padding: Double?
     public init() {}
 }

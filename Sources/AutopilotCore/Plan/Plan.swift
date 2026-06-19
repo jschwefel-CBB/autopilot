@@ -27,10 +27,17 @@ public struct Step: Codable, Equatable, Sendable {
     public var args: ActionArgs?
     public var assert: Assertion?
     public var timeoutMs: Int?
+    /// When true, AutoPilot crops and saves a screenshot of the step's target
+    /// element (pass OR fail) in addition to the normal full-display failure shot.
+    /// A quick way to build a visual log without sprinkling explicit `screenshot`
+    /// steps everywhere.
+    public var captureTarget: Bool?
     public init(id: String, action: Action, target: Selector? = nil,
-                args: ActionArgs? = nil, assert: Assertion? = nil, timeoutMs: Int? = nil) {
+                args: ActionArgs? = nil, assert: Assertion? = nil,
+                timeoutMs: Int? = nil, captureTarget: Bool? = nil) {
         self.id = id; self.action = action; self.target = target
         self.args = args; self.assert = assert; self.timeoutMs = timeoutMs
+        self.captureTarget = captureTarget
     }
 }
 

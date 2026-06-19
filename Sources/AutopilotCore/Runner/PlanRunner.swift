@@ -74,15 +74,45 @@ public struct PlanRunner {
             do {
                 let result = try runStep(step, app: appElement, launched: launched,
                                          targeting: targeting, timeoutMs: stepTimeout,
-                                         intervalMs: intervalMs, options: options)
+                                         intervalMs: intervalMs, options: options,
+                                         planName: plan.name)
                 let dur = Int((clock.now() - start) * 1000)
                 var r = result; r.durationMs = dur
+                // captureTarget: crop + save a screenshot of the step's target
+                // element on ANY outcome (pass or fail) when the author opts in.
+                if step.captureTarget == true, let t = step.target,
+                   case .ax(let el) = try? targeting.resolve(t, app: appElement,
+                                                              timeoutMs: stepTimeout, intervalMs: intervalMs,
+                                                              baseDir: options.planBaseDir) {
+                    let shotPath = options.artifactsDir
+                        .appendingPathComponent("\(step.id)-target.png").path
+                    let padding = step.args?.padding ?? 8
+                    let meta = stepMetadata(step, plan: plan.name)
+                    if Screenshot.captureElement(el, to: shotPath, padding: padding, metadata: meta) {
+                        r.screenshot = r.screenshot ?? shotPath
+                    }
+                }
                 report.add(r)
                 if r.result != .pass && !options.keepGoing { break }
             } catch {
                 let dur = Int((clock.now() - start) * 1000)
                 let dump = writeAXDump(appElement, stepId: step.id, dir: options.artifactsDir)
-                let shot = captureFailureShot(step.id, dir: options.artifactsDir)
+                // Full-display failure shot (always).
+                var shot = captureFailureShot(step.id, dir: options.artifactsDir,
+                                              step: step, planName: plan.name)
+                // If the step had a target and we can still resolve it, also save
+                // a tighter element-scoped crop as "<id>-target.png". Useful when
+                // the element is visible but had wrong content.
+                if let t = step.target,
+                   case .ax(let el) = try? targeting.resolve(t, app: appElement,
+                                                              timeoutMs: stepTimeout, intervalMs: intervalMs,
+                                                              baseDir: options.planBaseDir) {
+                    let elShot = options.artifactsDir.appendingPathComponent("\(step.id)-target.png").path
+                    let meta = stepMetadata(step, plan: plan.name).merging(["autopilot-result": "fail"]) { _, new in new }
+                    if Screenshot.captureElement(el, to: elShot, padding: step.args?.padding ?? 8, metadata: meta) {
+                        shot = shot ?? elShot
+                    }
+                }
                 // A targeting failure (element not found / ambiguous / timed out)
                 // means the app's UI wasn't as the plan expected — that's a test
                 // FAILURE. Everything else (launch failure, AX action failure,
@@ -110,7 +140,7 @@ public struct PlanRunner {
 
     private func runStep(_ step: Step, app: AXUIElement, launched: LaunchedApp,
                          targeting: Targeting, timeoutMs: Int, intervalMs: Int,
-                         options: RunOptions) throws -> StepResult {
+                         options: RunOptions, planName: String = "") throws -> StepResult {
         switch step.action {
         case .launch:
             return StepResult(id: step.id, result: .pass, durationMs: 0)
@@ -122,9 +152,26 @@ public struct PlanRunner {
             return StepResult(id: step.id, result: .pass, durationMs: 0)
         case .screenshot:
             let path = step.args?.path ?? options.artifactsDir.appendingPathComponent("\(step.id).png").path
-            let ok = Screenshot.captureMainDisplay(to: path)
+            let padding = step.args?.padding ?? 0
+            let meta = stepMetadata(step, plan: planName)
+            let ok: Bool
+            if let t = step.target,
+               case .ax(let el) = try? targeting.resolve(t, app: app,
+                                                          timeoutMs: timeoutMs, intervalMs: intervalMs,
+                                                          baseDir: options.planBaseDir) {
+                // Target-scoped: capture just the element frame (+padding).
+                ok = Screenshot.captureElement(el, to: path, padding: padding, metadata: meta)
+            } else if let ax = step.args?.atX, let ay = step.args?.atY,
+                      let w = step.args?.width, let h = step.args?.height {
+                // Absolute region capture.
+                let rect = CGRect(x: ax, y: ay, width: w, height: h)
+                ok = Screenshot.captureRegion(rect, to: path, metadata: meta)
+            } else {
+                // Full display.
+                ok = Screenshot.captureMainDisplay(to: path, metadata: meta)
+            }
             return StepResult(id: step.id, result: ok ? .pass : .fail, durationMs: 0,
-                              screenshot: path)
+                              screenshot: ok ? path : nil)
         case .waitFor:
             let present = step.args?.present ?? true
             let ok = targeting.waitForPresence(step.target!, present: present, app: app,
@@ -386,9 +433,20 @@ public struct PlanRunner {
 
     /// Capture a failure screenshot; return its path only if the write actually
     /// succeeded, so the report never points at a file that doesn't exist.
-    private func captureFailureShot(_ stepId: String, dir: URL) -> String? {
+    /// Build the PNG tEXt metadata dict for a step screenshot.
+    private func stepMetadata(_ step: Step, plan: String) -> [String: String] {
+        var m: [String: String] = ["autopilot-step": step.id, "autopilot-action": step.action.rawValue]
+        if !plan.isEmpty { m["autopilot-plan"] = plan }
+        return m
+    }
+
+    private func captureFailureShot(_ stepId: String, dir: URL,
+                                     step: Step? = nil, planName: String = "") -> String? {
         let shot = dir.appendingPathComponent("\(stepId).png").path
-        return Screenshot.captureMainDisplay(to: shot) ? shot : nil
+        var meta: [String: String] = ["autopilot-step": stepId, "autopilot-result": "fail"]
+        if !planName.isEmpty { meta["autopilot-plan"] = planName }
+        if let s = step { meta["autopilot-action"] = s.action.rawValue }
+        return Screenshot.captureMainDisplay(to: shot, metadata: meta) ? shot : nil
     }
 
     /// Visual actions require Screen Recording. If it's missing, return a clear

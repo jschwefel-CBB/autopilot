@@ -91,6 +91,10 @@ Each step is one action. Common shape:
 - `id` — **must be unique** within the plan (duplicates are rejected). Appears in
   the report, so name it meaningfully (`type-search-query`, not `s3`).
 - `timeoutMs` (optional per-step) overrides the plan default for this step only.
+- `captureTarget` (optional, bool) — when `true`, AutoPilot saves a cropped
+  screenshot of the step's `target` element on **any** outcome (pass or fail) as
+  `<id>-target.png` in the artifacts dir. No dedicated `screenshot` step needed.
+  Use `args.padding` (default 8) to add breathing room around the element.
 
 ### Action reference
 
@@ -109,7 +113,7 @@ Each step is one action. Common shape:
 | `scroll` | **yes** | `deltaX`/`deltaY` | Scrolls by the given pixel deltas. |
 | `drag` | **yes** (source) | `to` | Drags from the source element to `to` (a destination selector). File drag-drop (`toFiles`) is **not supported** via synthetic events — use `target.launchFiles` instead. |
 | `waitFor` | **yes** | `present` | Waits until the element appears (`present: true`, default) or disappears (`present: false`). |
-| `screenshot` | no | `path` (optional) | Captures the main display to PNG (defaults into the artifacts dir). |
+| `screenshot` | optional | `path`, `padding` | Captures to PNG. **No target** → full display. **With target** → crops to that element's frame. **With `atX/atY/width/height`** → absolute region. `padding` adds N points of context around the element (default 0). |
 | `assert` | **yes** | — (`assert` block) | Checks a property or presence (§4, assertions). |
 | `assertPixel` | optional | `color` (+ point) | Asserts a single screen pixel's color (visual features AX can't see). See §13. |
 | `assertRegion` | optional | `color`,`width`,`height`,`mode` | Asserts the **average** or **dominant** color over a rectangle — robust for thin glyphs where `assertPixel` is fragile. See §13. |
@@ -168,7 +172,22 @@ Each step is one action. Common shape:
 // waitFor (appear / disappear) and screenshot
 { "id": "appear", "action": "waitFor", "target": { "identifier": "sheet" },
   "args": { "present": true } }
+
+// screenshot — three modes
+// Full display (no target):
 { "id": "snap",   "action": "screenshot", "args": { "path": "/tmp/state.png" } }
+// Element-scoped (crops to the sheet + 16pt padding on all sides):
+{ "id": "sheet-shot", "action": "screenshot",
+  "target": { "identifier": "saveSheet" }, "args": { "padding": 16 } }
+// Absolute region:
+{ "id": "toolbar-shot", "action": "screenshot",
+  "args": { "atX": 0, "atY": 0, "width": 800, "height": 50 } }
+
+// captureTarget — attach an element crop to ANY step, pass or fail, without a
+// dedicated screenshot step. 8pt default padding.
+{ "id": "check-label", "action": "assert", "target": { "identifier": "statusLabel" },
+  "assert": { "property": "value", "op": "equals", "expected": "Ready" },
+  "captureTarget": true }
 ```
 
 > **`marked` caveat:** menu checkmark state (`AXMenuItemMarkChar`) is not
@@ -194,7 +213,9 @@ Each step is one action. Common shape:
 | `color` | string | `assertPixel` (expected `#RRGGBB`) |
 | `tolerance` | number | RGB distance (`assertPixel` default 16, `assertRegion` default 24) |
 | `offsetX`, `offsetY` | int | `assertPixel` (sample point = target center + offset) |
-| `atX`, `atY` | int | `assertPixel` (absolute sample point when no target) |
+| `atX`, `atY` | int | `assertPixel` / `screenshot` (absolute point or region origin) |
+| `width`, `height` | int | `assertRegion`, `snapshot`, `screenshot` (region size in points) |
+| `padding` | number | `screenshot` / `captureTarget` — points of space added around the element frame on all sides (default 0 for `screenshot`, 8 for `captureTarget`) |
 
 ### Assertions
 

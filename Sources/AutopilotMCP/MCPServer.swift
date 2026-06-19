@@ -78,23 +78,34 @@ final class MCPServer {
     }
 
     func dumpAXTree(id: Any?, args: [String: Any]) {
-        // Authoring aid: launch (or attach) and dump the snapshot.
-        guard let bundleId = args["bundleId"] as? String ?? (args["path"] as? String) else {
-            respond(id: id, error: ["code": -32602, "message": "dump_axtree needs bundleId or path"]); return
-        }
+        // ATTACH to the running instance and dump ITS tree — never launch or
+        // terminate. Inspecting must observe the app as the user sees it.
         do {
-            let target = args["path"] != nil ? TargetApp(path: bundleId) : TargetApp(bundleId: bundleId)
-            let launched = try AppLauncher().launch(target)
+            let launched: LaunchedApp
+            if let pid = args["pid"] as? Int {
+                launched = try AppLauncher().attach(pid: pid_t(pid))
+            } else if let bundleId = args["bundleId"] as? String {
+                launched = try AppLauncher().attach(TargetApp(bundleId: bundleId))
+            } else if let path = args["path"] as? String {
+                launched = try AppLauncher().attach(TargetApp(path: path))
+            } else {
+                respond(id: id, error: ["code": -32602, "message": "dump_axtree needs bundleId, path, or pid"]); return
+            }
             let app = AXTree.application(pid: launched.pid)
-            // brief settle, polled via a window check
-            _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 4000, intervalMs: 100)
+            _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 2000, intervalMs: 100)
             let snap = AXTree.snapshot(app)
-            // Optional filter: "interactive" omits static/decorative nodes; default = all.
             let interactiveOnly = (args["interactiveOnly"] as? Bool) ?? false
             let nodes = interactiveOnly ? snap.nodes.filter { AXRoles.isInteractive($0["role"]) } : snap.nodes
-            let payload: [String: Any] = ["truncated": snap.truncated, "nodeCount": nodes.count, "nodes": nodes]
+            let payload: [String: Any] = [
+                "pid": Int(launched.pid),
+                "appName": launched.runningApp.localizedName ?? "",
+                "truncated": snap.truncated, "nodeCount": nodes.count, "nodes": nodes,
+            ]
             let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
             respondToolText(id: id, text: String(data: data, encoding: .utf8) ?? "{}")
+        } catch let e as AppLaunchError {
+            // e.g. noRunningInstance — say so clearly instead of returning a blank tree.
+            respond(id: id, error: ["code": -32011, "message": "\(e)"])
         } catch {
             respond(id: id, error: ["code": -32603, "message": String(describing: error)])
         }
@@ -112,9 +123,10 @@ final class MCPServer {
          "description": "Return the JSON report from the most recent run_plan.",
          "inputSchema": ["type": "object", "properties": [:]]],
         ["name": "dump_axtree",
-         "description": "Launch an app (bundleId or path) and dump its accessibility tree to help author selectors.",
+         "description": "Attach to a RUNNING app (by bundleId, path, or pid) and dump its accessibility tree — the same tree the user sees. Never launches or terminates the app; errors clearly if no matching instance is running. Returns pid + appName so you can confirm you inspected the right process.",
          "inputSchema": ["type": "object", "properties": [
-            "bundleId": ["type": "string"], "path": ["type": "string"]]]],
+            "bundleId": ["type": "string"], "path": ["type": "string"],
+            "pid": ["type": "integer"], "interactiveOnly": ["type": "boolean"]]]],
     ]
 
     func respondToolText(id: Any?, text: String) {

@@ -9,10 +9,14 @@ public struct LaunchedApp {
 public enum AppLaunchError: Error, CustomStringConvertible {
     case notFound(String)
     case launchFailed(String)
+    case noRunningInstance(String)
     public var description: String {
         switch self {
         case .notFound(let s): return "App not found: \(s)"
         case .launchFailed(let s): return "Failed to launch: \(s)"
+        case .noRunningInstance(let s):
+            return "No running instance of \(s) — start it first, or pass --pid, " +
+                   "or use a command that launches the app (run)."
         }
     }
 }
@@ -71,6 +75,38 @@ public struct AppLauncher {
 
     public func terminate(_ app: LaunchedApp) {
         app.runningApp.terminate()
+    }
+
+    /// Pure selection: from a list of running apps, choose the one to inspect —
+    /// the active (frontmost) one if any is active, else the first. Returns nil
+    /// for an empty list. Kept separate from AppKit so it is unit-testable via
+    /// a parallel helper; the live version uses NSRunningApplication directly.
+    static func chooseFrontmost<T>(_ apps: [T], isActive: (T) -> Bool) -> T? {
+        if let active = apps.first(where: isActive) { return active }
+        return apps.first
+    }
+
+    /// Attach to the already-running instance of `target` WITHOUT launching or
+    /// terminating anything — for inspection commands (dump-axtree/find/suggest).
+    /// Prefers the frontmost instance. Throws if nothing matching is running.
+    public func attach(_ target: TargetApp) throws -> LaunchedApp {
+        let url = try resolveURL(target)
+        let matches = NSWorkspace.shared.runningApplications.filter {
+            $0.bundleURL?.standardizedFileURL == url.standardizedFileURL
+                || (target.bundleId != nil && $0.bundleIdentifier == target.bundleId)
+        }
+        guard let app = Self.chooseFrontmost(matches, isActive: { $0.isActive }) else {
+            throw AppLaunchError.noRunningInstance(target.bundleId ?? target.path ?? url.path)
+        }
+        return LaunchedApp(pid: app.processIdentifier, runningApp: app)
+    }
+
+    /// Attach to a specific running process by pid. The unambiguous escape hatch.
+    public func attach(pid: pid_t) throws -> LaunchedApp {
+        guard let app = NSRunningApplication(processIdentifier: pid) else {
+            throw AppLaunchError.noRunningInstance("pid \(pid)")
+        }
+        return LaunchedApp(pid: pid, runningApp: app)
     }
 
     /// Block until no running application shares `url`'s bundle, or the timeout

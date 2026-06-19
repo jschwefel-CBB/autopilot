@@ -1,4 +1,5 @@
 import Foundation
+import ApplicationServices
 import ArgumentParser
 import AutopilotCore
 
@@ -11,25 +12,53 @@ struct Autopilot: ParsableCommand {
     )
 }
 
-struct Suggest: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "suggest",
-        abstract: "Launch an app and suggest a selector for each interactive element.")
-
-    @Argument(help: "Bundle id or path to a .app bundle.")
-    var app: String
-
-    func run() throws {
-        let target: TargetApp = app.hasSuffix(".app") || app.hasPrefix("/")
-            ? TargetApp(path: app) : TargetApp(bundleId: app)
+/// Shared helper for inspection commands (dump-axtree/find/suggest): ATTACH to a
+/// running instance (never launch/terminate). Resolves by --pid first, else by
+/// the bundleId/path argument → frontmost running instance.
+enum Inspect {
+    static func attach(app appArg: String?, pid: Int32?) throws -> LaunchedApp {
         guard Permissions().hasAccessibility() else {
             FileHandle.standardError.write(Data("Accessibility permission required (run: autopilot doctor)\n".utf8))
             throw ExitCode(3)
         }
-        let launched = try AppLauncher().launch(target)
-        let appEl = AXTree.application(pid: launched.pid)
+        do {
+            if let pid { return try AppLauncher().attach(pid: pid_t(pid)) }
+            guard let appArg else {
+                FileHandle.standardError.write(Data("Provide an app (bundle id or .app path) or --pid.\n".utf8))
+                throw ExitCode(2)
+            }
+            let target: TargetApp = appArg.hasSuffix(".app") || appArg.hasPrefix("/")
+                ? TargetApp(path: appArg) : TargetApp(bundleId: appArg)
+            return try AppLauncher().attach(target)
+        } catch let e as AppLaunchError {
+            FileHandle.standardError.write(Data("\(e)\n".utf8))
+            throw ExitCode(2)
+        }
+    }
+
+    /// Wait briefly for the AX tree to be queryable, then return the app element.
+    static func appElement(_ launched: LaunchedApp) -> AXUIElement {
+        let el = AXTree.application(pid: launched.pid)
         _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true,
-                                        app: appEl, timeoutMs: 4000, intervalMs: 100)
+                                        app: el, timeoutMs: 2000, intervalMs: 100)
+        return el
+    }
+}
+
+struct Suggest: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "suggest",
+        abstract: "Attach to a RUNNING app and suggest a selector for each interactive element.")
+
+    @Argument(help: "Bundle id or path to a .app bundle (of the running app).")
+    var app: String?
+
+    @Option(name: .long, help: "Attach to a specific running process by pid (unambiguous).")
+    var pid: Int32?
+
+    func run() throws {
+        let launched = try Inspect.attach(app: app, pid: pid)   // attach, never launch
+        let appEl = Inspect.appElement(launched)
         let snap = AXTree.snapshot(appEl)
         let suggestions = SelectorSuggester.suggest(from: snap.nodes)
         for s in suggestions {
@@ -38,41 +67,36 @@ struct Suggest: ParsableCommand {
             let label = s.label.isEmpty ? "" : "  “\(s.label)”"
             print("\(s.role)\(label)\n    \(oneLine)\n    # \(s.note)")
         }
-        AppLauncher().terminate(launched)
     }
 }
 
 struct DumpAxtree: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "dump-axtree",
-        abstract: "Launch an app and print its accessibility tree (for authoring selectors).")
+        abstract: "Attach to a RUNNING app and print its accessibility tree (for authoring selectors).")
 
-    @Argument(help: "Bundle id (com.example.app) or a path to a .app bundle.")
-    var app: String
+    @Argument(help: "Bundle id (com.example.app) or a path to a .app bundle (of the running app).")
+    var app: String?
+
+    @Option(name: .long, help: "Attach to a specific running process by pid (unambiguous).")
+    var pid: Int32?
 
     @Flag(name: .long, help: "Only include interactive elements (buttons, fields, rows, …).")
     var interactiveOnly: Bool = false
 
     func run() throws {
-        let target: TargetApp = app.hasSuffix(".app") || app.hasPrefix("/")
-            ? TargetApp(path: app) : TargetApp(bundleId: app)
-        guard Permissions().hasAccessibility() else {
-            FileHandle.standardError.write(Data("Accessibility permission required (run: autopilot doctor)\n".utf8))
-            throw ExitCode(3)
-        }
-        let launched: LaunchedApp
-        do { launched = try AppLauncher().launch(target) }
-        catch { FileHandle.standardError.write(Data("\(error)\n".utf8)); throw ExitCode(2) }
-        let appEl = AXTree.application(pid: launched.pid)
-        _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true,
-                                        app: appEl, timeoutMs: 4000, intervalMs: 100)
+        let launched = try Inspect.attach(app: app, pid: pid)   // attach, never launch
+        let appEl = Inspect.appElement(launched)
         let snap = AXTree.snapshot(appEl)
         let nodes = interactiveOnly ? snap.nodes.filter { AXRoles.isInteractive($0["role"]) } : snap.nodes
-        let payload: [String: Any] = ["truncated": snap.truncated, "nodeCount": nodes.count, "nodes": nodes]
+        let payload: [String: Any] = [
+            "pid": launched.pid,
+            "appName": launched.runningApp.localizedName ?? "",
+            "truncated": snap.truncated, "nodeCount": nodes.count, "nodes": nodes,
+        ]
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
         FileHandle.standardOutput.write(data)
         FileHandle.standardOutput.write(Data("\n".utf8))
-        AppLauncher().terminate(launched)
     }
 }
 
@@ -119,10 +143,13 @@ struct Lint: ParsableCommand {
 struct Find: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "find",
-        abstract: "Launch an app and show which elements a selector resolves to.")
+        abstract: "Attach to a RUNNING app and show which elements a selector resolves to.")
 
-    @Argument(help: "Bundle id or path to a .app bundle.")
-    var app: String
+    @Argument(help: "Bundle id or path to a .app bundle (of the running app).")
+    var app: String?
+
+    @Option(name: .long, help: "Attach to a specific running process by pid (unambiguous).")
+    var pid: Int32?
 
     @Option(name: .long, help: "AX role to match, e.g. AXButton.")
     var role: String?
@@ -132,21 +159,12 @@ struct Find: ParsableCommand {
     var title: String?
 
     func run() throws {
-        let target: TargetApp = app.hasSuffix(".app") || app.hasPrefix("/")
-            ? TargetApp(path: app) : TargetApp(bundleId: app)
-        guard Permissions().hasAccessibility() else {
-            FileHandle.standardError.write(Data("Accessibility permission required (run: autopilot doctor)\n".utf8))
-            throw ExitCode(3)
-        }
-        let launched = try AppLauncher().launch(target)
-        let appEl = AXTree.application(pid: launched.pid)
-        _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true,
-                                        app: appEl, timeoutMs: 4000, intervalMs: 100)
+        let launched = try Inspect.attach(app: app, pid: pid)   // attach, never launch
+        let appEl = Inspect.appElement(launched)
         let selector = Selector(role: role, identifier: identifier, title: title)
         let matches = AXResolver().findAll(in: appEl, selector: selector)
         print("\(matches.count) match(es) for \(AXResolver.describe(selector)):")
         for m in matches { print("  \(m)") }
-        AppLauncher().terminate(launched)
         if matches.count != 1 { throw ExitCode(1) }
     }
 }

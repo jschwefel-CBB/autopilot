@@ -5,10 +5,18 @@ public struct TargetApp: Codable, Equatable, Sendable {
     public var path: String?
     public var launchArgs: [String]?
     public var launchFiles: [String]?
+    /// When true, attach to the frontmost already-running instance instead of
+    /// terminating and relaunching. The run fails if no matching instance is running.
+    /// Use this for documentation-capture plans or any workflow where you need to
+    /// drive an app you have already arranged (e.g. opened a specific file, navigated
+    /// to a specific screen) without AutoPilot resetting its state.
+    public var attach: Bool?
     public init(bundleId: String? = nil, path: String? = nil,
-                launchArgs: [String]? = nil, launchFiles: [String]? = nil) {
+                launchArgs: [String]? = nil, launchFiles: [String]? = nil,
+                attach: Bool? = nil) {
         self.bundleId = bundleId; self.path = path
         self.launchArgs = launchArgs; self.launchFiles = launchFiles
+        self.attach = attach
     }
 }
 

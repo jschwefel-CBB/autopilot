@@ -42,3 +42,27 @@ import Foundation
         #expect(PlanLinter().lint(p).isEmpty)
     }
 }
+
+@Suite struct PlanLinterAttachTests {
+    func attachPlan(launchArgs: [String]? = nil, launchFiles: [String]? = nil) -> Plan {
+        Plan(schemaVersion: "1.0", name: "p",
+             target: TargetApp(bundleId: "a", launchArgs: launchArgs,
+                               launchFiles: launchFiles, attach: true),
+             steps: [Step(id: "q", action: .terminate)])
+    }
+
+    @Test func attachWithLaunchArgsIsWarning() {
+        let f = PlanLinter().lint(attachPlan(launchArgs: ["--reset"]))
+        #expect(f.contains { $0.message.contains("launchArgs") && $0.message.contains("attach") })
+    }
+
+    @Test func attachWithLaunchFilesIsWarning() {
+        let f = PlanLinter().lint(attachPlan(launchFiles: ["/tmp/file.txt"]))
+        #expect(f.contains { $0.message.contains("launchFiles") && $0.message.contains("attach") })
+    }
+
+    @Test func attachWithNoExtraFieldsIsClean() {
+        let f = PlanLinter().lint(attachPlan())
+        #expect(!f.contains { $0.message.contains("attach") })
+    }
+}

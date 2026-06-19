@@ -62,7 +62,15 @@ public struct PlanRunner {
         let intervalMs = defaults?.retryIntervalMs ?? 100
         let targeting = Targeting(poller: Poller(clock: clock))
 
-        let launched = try launcher.launch(plan.target)
+        let launched: LaunchedApp
+        if plan.target.attach == true {
+            // Attach mode: use the frontmost already-running instance without
+            // terminating/relaunching it. The caller is responsible for having
+            // the app in the desired state before running the plan.
+            launched = try launcher.attach(plan.target)
+        } else {
+            launched = try launcher.launch(plan.target)
+        }
         defer { /* leave app running unless a terminate step ran; harmless for tests */ }
         let appElement = AXTree.application(pid: launched.pid)
         // Give the app a beat to register its AX tree (polled, not a fixed sleep).
@@ -93,7 +101,7 @@ public struct PlanRunner {
                     let outcome = r.result == .pass ? "pass" : "fail"
                     let meta = stepMetadata(step, plan: options.planName)
                         .merging(["autopilot-result": outcome]) { _, new in new }
-                    if Screenshot.captureElement(el, to: shotPath, padding: padding, metadata: meta) {
+                    if Screenshot.captureElement(el, to: shotPath, padding: padding, metadata: meta) == nil {
                         r.screenshot = r.screenshot ?? shotPath
                     }
                 }
@@ -114,7 +122,7 @@ public struct PlanRunner {
                                                               baseDir: options.planBaseDir) {
                     let elShot = options.artifactsDir.appendingPathComponent("\(step.id)-target.png").path
                     let meta = stepMetadata(step, plan: plan.name).merging(["autopilot-result": "fail"]) { _, new in new }
-                    if Screenshot.captureElement(el, to: elShot, padding: step.args?.padding ?? 8, metadata: meta) {
+                    if Screenshot.captureElement(el, to: elShot, padding: step.args?.padding ?? 8, metadata: meta) == nil {
                         shot = shot ?? elShot
                     }
                 }
@@ -167,7 +175,13 @@ public struct PlanRunner {
                 if case .ax(let el) = try? targeting.resolve(t, app: app,
                                                               timeoutMs: timeoutMs, intervalMs: intervalMs,
                                                               baseDir: options.planBaseDir) {
-                    ok = Screenshot.captureElement(el, to: path, padding: padding, metadata: meta)
+                    if let reason = Screenshot.captureElement(el, to: path, padding: padding, metadata: meta) {
+                        // Element resolved but crop failed — fall back to full display.
+                        fallbackMessage = "element crop failed (\(reason)); fell back to full display"
+                        ok = Screenshot.captureMainDisplay(to: path, metadata: meta)
+                    } else {
+                        ok = true
+                    }
                 } else {
                     fallbackMessage = "target did not resolve; fell back to full display"
                     ok = Screenshot.captureMainDisplay(to: path, metadata: meta)

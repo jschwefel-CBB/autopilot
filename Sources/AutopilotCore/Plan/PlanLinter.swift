@@ -57,6 +57,18 @@ public struct PlanLinter {
             }
         }
 
+        // attach: true with launchArgs/launchFiles — those fields are ignored.
+        if plan.target.attach == true {
+            if plan.target.launchArgs != nil {
+                findings.append(.init(severity: .warning, stepId: nil,
+                    message: "`target.launchArgs` is ignored when `attach: true` — the app is already running"))
+            }
+            if plan.target.launchFiles != nil {
+                findings.append(.init(severity: .warning, stepId: nil,
+                    message: "`target.launchFiles` is ignored when `attach: true` — open files before running the plan"))
+            }
+        }
+
         // No window wait before the first input/assert step.
         let inputActions: Set<Action> = [.click, .doubleClick, .rightClick, .press,
                                          .type, .keyPress, .setValue, .scroll, .drag, .menu]

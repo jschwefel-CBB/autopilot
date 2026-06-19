@@ -24,22 +24,27 @@ public enum Screenshot {
     }
 
     /// Capture the frame of an AX element, expanded by `padding` points on all
-    /// sides. Returns nil if the element has no frame or capture fails.
+    /// sides. Returns a failure reason on error, nil on success.
+    /// ScreenCaptureKit handles multi-display (including negative-origin secondary
+    /// displays) via SCShareableContent, so we do NOT clamp to the primary display.
     @discardableResult
     public static func captureElement(_ element: AXUIElement, to path: String,
                                       padding: Double = 0,
-                                      metadata: [String: String] = [:]) -> Bool {
-        guard var frame = AXTree.frame(element) else { return false }
+                                      metadata: [String: String] = [:]) -> String? {
+        guard var frame = AXTree.frame(element) else {
+            return "element has no screen frame (off-screen or window not rendered)"
+        }
         if padding > 0 { frame = frame.insetBy(dx: -padding, dy: -padding) }
-        // Clamp to the display so we never request an out-of-bounds rect.
-        let displayID = CGMainDisplayID()
-        let display = CGRect(x: 0, y: 0,
-                             width: CGFloat(CGDisplayPixelsWide(displayID)),
-                             height: CGFloat(CGDisplayPixelsHigh(displayID)))
-        frame = frame.intersection(display)
-        guard !frame.isNull, !frame.isEmpty else { return false }
-        guard let image = try? ScreenCapture.image(of: frame) else { return false }
-        return writePNG(image, to: path, metadata: metadata)
+        guard !frame.isNull, !frame.isEmpty else {
+            return "element frame is empty after padding"
+        }
+        guard let image = try? ScreenCapture.image(of: frame) else {
+            return "screen capture of element frame failed (Screen Recording permission required)"
+        }
+        guard writePNG(image, to: path, metadata: metadata) else {
+            return "failed to write PNG to \(path)"
+        }
+        return nil  // success
     }
 
     /// Write a CGImage to a PNG file with optional tEXt metadata chunks embedded.

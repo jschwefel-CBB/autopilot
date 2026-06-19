@@ -284,3 +284,17 @@ Until R4-1 lands, AutoPilot can drive an app it launches (the `run` path is
 sound — the medit suite passes), but its **state-inspection** commands cannot be
 trusted against a separately-running instance. Fixing R4-1 restores AutoPilot as
 a trustworthy verifier.
+
+---
+
+## Screenshot field report — medit doc-capture session (SC findings)
+
+From medit doc-capture session using `screenshot` / `captureTarget`.
+
+| ID | Priority | Finding | Status |
+|---|---|---|---|
+| SC-1 | P1 | `screenshot` with `target` fails silently — `message: null`, no PNG, no reason | **FIXED** — `captureElement` now returns `String?` (nil = success, non-nil = reason); runner surfaces the reason in `message` and falls back to full display |
+| SC-2 | P2 | `run` always terminates+relaunches — no way to drive an app already in a specific state | **FIXED** — added `target.attach: true`; uses `AppLauncher.attach()` to connect to the frontmost running instance without terminating it; fails clearly if no match |
+| SC-3 | P3 | Element-scoped crops of thin/1-line elements capture surrounding content | **DOCUMENTED** — §12a now explains the AX-frame-is-the-region behavior and recommends the parent container or absolute-region mode for thin elements |
+| SC-4 | P2 | No reliable drive-to-transient-state-then-capture flow | **Addressed by SC-1 + SC-2** — SC-1 fix means `screenshot` after `menu` no longer silently fails; SC-2 (attach mode) means the caller can arrange the app first; remaining gap (holding a menu open across a capture) is an inherent timing constraint |
+| SC-5 | P1 | Screenshots fail for windows at negative X (secondary display to the left) | **FIXED** — removed main-display clamp in `captureElement`; ScreenCaptureKit already handles negative origins via `SCShareableContent.displays.first(where: displayContains)` |

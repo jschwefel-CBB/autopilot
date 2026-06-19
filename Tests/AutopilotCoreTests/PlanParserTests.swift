@@ -24,6 +24,33 @@ import Foundation
         #expect(plan.steps[0].action == .click)
         #expect(plan.steps[0].target?.identifier == "ok")
     }
+
+    @Test func decodesAttachMode() throws {
+        let json = """
+        {
+          "schemaVersion": "1.0",
+          "name": "attach-test",
+          "target": { "bundleId": "com.example.app", "attach": true },
+          "steps": [ { "id": "q", "action": "terminate" } ]
+        }
+        """.data(using: .utf8)!
+        let plan = try JSONDecoder().decode(Plan.self, from: json)
+        #expect(plan.target.attach == true)
+        #expect(plan.target.bundleId == "com.example.app")
+    }
+
+    @Test func attachDefaultsToNil() throws {
+        let json = """
+        {
+          "schemaVersion": "1.0",
+          "name": "normal",
+          "target": { "bundleId": "com.example.app" },
+          "steps": [ { "id": "q", "action": "terminate" } ]
+        }
+        """.data(using: .utf8)!
+        let plan = try JSONDecoder().decode(Plan.self, from: json)
+        #expect(plan.target.attach == nil)
+    }
 }
 
 @Suite struct PlanValidationTests {

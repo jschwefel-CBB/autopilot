@@ -73,6 +73,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "attach": {
+          "type": "boolean",
+          "description": "When true, attach to the frontmost already-running instance instead of terminating and relaunching. The run fails immediately if no matching instance is running. Use for documentation-capture plans or any workflow where you have already navigated the app to the desired state and do not want AutoPilot to reset it. launchArgs and launchFiles are ignored when attach is true."
         }
       },
       "anyOf": [

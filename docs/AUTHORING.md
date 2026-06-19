@@ -68,7 +68,8 @@ Required top-level fields:
   "bundleId": "com.jschwefel.medit",      // resolve an installed app by bundle id
   "path": "/path/to/App.app",             // OR launch a specific .app bundle
   "launchArgs": ["--reset-state"],         // optional process args
-  "launchFiles": ["/tmp/sample.txt"]       // optional files to open with the app
+  "launchFiles": ["/tmp/sample.txt"],      // optional files to open with the app
+  "attach": true                           // optional: use already-running instance
 }
 ```
 
@@ -77,6 +78,14 @@ Required top-level fields:
   Mach-O does not launch as a foreground GUI app and exposes no AX tree.
 - `launchArgs` is how you pass a test hook like `--reset-state` (the target app
   must honor it — see §9).
+- **`attach: true`** — attach to the frontmost already-running instance instead
+  of terminating and relaunching it. The run **fails immediately** if no matching
+  instance is running. Use this when you need to drive the app from a specific
+  state you arranged manually — e.g. a documentation-capture plan that needs a
+  particular document open, or a transient UI state (open panel, Recent pane
+  focused) that a fresh launch would reset. `launchArgs` and `launchFiles` are
+  ignored when `attach: true`. PlanLinter warns if either is set alongside
+  `attach: true`.
 
 ---
 
@@ -557,14 +566,27 @@ The pre-flight checklist is at the very end (§22).
 **Unresolved target fallback:** if `target` is set but the element cannot be
 resolved (timeout, ambiguous, app hung), the step does **not** fail — it falls
 back to a full-display capture and sets `result.message` to
-`"target did not resolve; fell back to full display"`. The step still returns
-`.pass` if capture succeeds. Check `message` in `report.json` if you need to
-detect this.
+`"target did not resolve; fell back to full display"`. If the element *resolves*
+but capture fails (element off-screen, window not yet rendered, Screen Recording
+absent), the message will be `"element crop failed (<reason>); fell back to full
+display"`. The step still returns `.pass` if capture succeeds. Check `message`
+in `report.json` if you need to detect either case.
 
 **Vision targets:** element-scoped capture only works for AX-resolved targets
 (selector resolves to a real `AXUIElement`). If your selector uses a `vision`
 block and the element is found only via image template matching (returning a
 screen point, not an AX element), the screenshot falls back to full display.
+
+**Multi-display:** capture handles negative-origin coordinates (e.g. a window on
+a secondary display to the left of the primary) correctly. `atX/atY` absolute
+regions also work across displays.
+
+**Thin-element sharp edge:** element-scoped crops use the element's AX frame as
+the capture region. For thin elements (1-line status labels, scroll indicators),
+the frame is the element itself — padding expands it into surrounding content
+rather than adding context around a "solid" region. For thin labels, capture the
+parent container window and crop geometrically, or use the `atX/atY/width/height`
+absolute-region mode with a region you measured from `dump-axtree`.
 
 **`path`** is optional — defaults to `<step-id>.png` inside the plan's
 artifacts directory. Omitting it is usually the right call.

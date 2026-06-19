@@ -39,6 +39,9 @@ every run.
   (`run_plan`, `get_report`, `dump_axtree`).
 - Plan composition via `include`; per-plan artifact namespacing; reliable
   back-to-back relaunch.
+- **Attach mode** (`target.attach: true`): drive an already-running instance
+  without a terminate-relaunch, for documentation-capture and transient-state
+  workflows where you have arranged the app before the plan runs.
 
 ## Layout
 

@@ -5,15 +5,10 @@ on:
     tags: ['v*']
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: macos-14
-            arch: arm64
-          - os: macos-13
-            arch: x86_64
-    runs-on: ${{ matrix.os }}
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -34,32 +29,6 @@ jobs:
         run: |
           TARBALL="$(ls dist/*.tar.gz)"
           scripts/notarize.sh "$TARBALL"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: autopilot-${{ matrix.arch }}
-          path: dist/*.tar.gz
-
-  publish:
-    needs: build
-    runs-on: macos-14
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download arm64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: autopilot-arm64
-          path: dist/
-
-      - name: Download x86_64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: autopilot-x86_64
-          path: dist/
 
       - name: Create GitHub Release
         env:

@@ -24,10 +24,3 @@ enum MacOSPropertyReader {
         }
     }
 }
-
-// TEMPORARY back-compat shim so PlanRunner keeps compiling until Task 9.
-extension AssertionEngine {
-    func readProperty(_ property: AssertProperty, from element: AXUIElement) -> String? {
-        MacOSPropertyReader.read(property, from: element)
-    }
-}

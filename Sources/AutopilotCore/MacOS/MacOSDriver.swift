@@ -73,7 +73,7 @@ public struct MacOSDriver: AppDriver {
         }
         guard ok else {
             if let vision = selector.vision {
-                let imagePath = Targeting.resolveImagePath(vision.image, baseDir: baseDir)
+                let imagePath = PlanRunner.resolveImagePath(vision.image, baseDir: baseDir)
                 let mainID = CGMainDisplayID()
                 let screenRect = CGRect(x: 0, y: 0,
                                         width: CGFloat(CGDisplayPixelsWide(mainID)),

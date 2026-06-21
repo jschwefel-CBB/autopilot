@@ -16,32 +16,35 @@ struct Autopilot: ParsableCommand {
 /// running instance (never launch/terminate). Resolves by --pid first, else by
 /// the bundleId/path argument → frontmost running instance.
 enum Inspect {
-    static func attach(app appArg: String?, pid: Int32?) throws -> LaunchedApp {
-        guard Permissions().hasAccessibility() else {
+    /// The shared macOS backend the inspection commands route through.
+    static let driver = MacOSDriver()
+
+    static func attach(app appArg: String?, pid: Int32?) throws -> LaunchedHandle {
+        guard driver.hasAccessibility() else {
             FileHandle.standardError.write(Data("Accessibility permission required (run: autopilot doctor)\n".utf8))
             throw ExitCode(3)
         }
         do {
-            if let pid { return try AppLauncher().attach(pid: pid_t(pid)) }
-            guard let appArg else {
-                FileHandle.standardError.write(Data("Provide an app (bundle id or .app path) or --pid.\n".utf8))
-                throw ExitCode(2)
+            let handle: LaunchedHandle
+            if let pid {
+                handle = try driver.attach(pid: pid)
+            } else {
+                guard let appArg else {
+                    FileHandle.standardError.write(Data("Provide an app (bundle id or .app path) or --pid.\n".utf8))
+                    throw ExitCode(2)
+                }
+                let target: TargetApp = appArg.hasSuffix(".app") || appArg.hasPrefix("/")
+                    ? TargetApp(path: appArg) : TargetApp(bundleId: appArg)
+                handle = try driver.attach(target)
             }
-            let target: TargetApp = appArg.hasSuffix(".app") || appArg.hasPrefix("/")
-                ? TargetApp(path: appArg) : TargetApp(bundleId: appArg)
-            return try AppLauncher().attach(target)
+            // Wait briefly for the AX tree to be queryable before inspecting it.
+            _ = driver.waitForPresence(Selector(role: "AXWindow"), present: true,
+                                       app: handle, timeoutMs: 2000, intervalMs: 100)
+            return handle
         } catch let e as AppLaunchError {
             FileHandle.standardError.write(Data("\(e)\n".utf8))
             throw ExitCode(2)
         }
-    }
-
-    /// Wait briefly for the AX tree to be queryable, then return the app element.
-    static func appElement(_ launched: LaunchedApp) -> AXUIElement {
-        let el = AXTree.application(pid: launched.pid)
-        _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true,
-                                        app: el, timeoutMs: 2000, intervalMs: 100)
-        return el
     }
 }
 
@@ -57,10 +60,8 @@ struct Suggest: ParsableCommand {
     var pid: Int32?
 
     func run() throws {
-        let launched = try Inspect.attach(app: app, pid: pid)   // attach, never launch
-        let appEl = Inspect.appElement(launched)
-        let snap = AXTree.snapshot(appEl)
-        let suggestions = SelectorSuggester.suggest(from: snap.nodes)
+        let handle = try Inspect.attach(app: app, pid: pid)   // attach, never launch
+        let suggestions = Inspect.driver.suggestSelectors(app: handle)
         for s in suggestions {
             let sel = (try? String(data: JSONEncoder.pretty.encode(s.selector), encoding: .utf8)) ?? ""
             let oneLine = sel.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "  ", with: " ")
@@ -85,13 +86,12 @@ struct DumpAxtree: ParsableCommand {
     var interactiveOnly: Bool = false
 
     func run() throws {
-        let launched = try Inspect.attach(app: app, pid: pid)   // attach, never launch
-        let appEl = Inspect.appElement(launched)
-        let snap = AXTree.snapshot(appEl)
+        let handle = try Inspect.attach(app: app, pid: pid)   // attach, never launch
+        let snap = Inspect.driver.dumpTree(app: handle)
         let nodes = interactiveOnly ? snap.nodes.filter { AXRoles.isInteractive($0["role"]) } : snap.nodes
         let payload: [String: Any] = [
-            "pid": launched.pid,
-            "appName": launched.runningApp.localizedName ?? "",
+            "pid": handle.pid,
+            "appName": handle.appName,
             "truncated": snap.truncated, "nodeCount": nodes.count, "nodes": nodes,
         ]
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
@@ -159,10 +159,9 @@ struct Find: ParsableCommand {
     var title: String?
 
     func run() throws {
-        let launched = try Inspect.attach(app: app, pid: pid)   // attach, never launch
-        let appEl = Inspect.appElement(launched)
+        let handle = try Inspect.attach(app: app, pid: pid)   // attach, never launch
         let selector = Selector(role: role, identifier: identifier, title: title)
-        let matches = MacOSAXResolver().findAll(in: appEl, selector: selector)
+        let matches = Inspect.driver.findAll(selector, app: handle)
         print("\(matches.count) match(es) for \(AXResolver.describe(selector)):")
         for m in matches { print("  \(m)") }
         if matches.count != 1 { throw ExitCode(1) }
@@ -214,7 +213,7 @@ struct Run: ParsableCommand {
             throw ExitCode(2)
         }
 
-        let report = try PlanRunner().run(plan, options: RunOptions(
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(
             keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir,
             updateSnapshots: updateSnapshots))
         let reporter = Reporter()
@@ -264,7 +263,7 @@ struct Run: ParsableCommand {
             // remaining plans run and suite.json is always written.
             let report: Report
             do {
-                report = try PlanRunner().run(plan, options: RunOptions(
+                report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(
                     keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir,
                     updateSnapshots: updateSnapshots))
             } catch {
@@ -328,22 +327,22 @@ extension JSONEncoder {
 struct Doctor: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Check required permissions.")
     func run() throws {
-        let perms = Permissions()
+        let driver = MacOSDriver()
         var missing = false
-        if perms.hasAccessibility() {
+        if driver.hasAccessibility() {
             print("Accessibility:    OK")
         } else {
             print("Accessibility:    MISSING")
-            print(perms.accessibilityInstructions())
+            print(driver.accessibilityInstructions())
             missing = true
         }
         // Screen Recording is required for visual actions. Report it but don't
         // make it fatal on its own — many plans don't use visual assertions.
-        if perms.hasScreenRecording() {
+        if driver.hasScreenRecording() {
             print("Screen Recording: OK")
         } else {
             print("Screen Recording: MISSING (needed only for assertPixel/assertRegion/snapshot/screenshot)")
-            print(perms.screenRecordingInstructions())
+            print(driver.screenRecordingInstructions())
         }
         if missing { throw ExitCode(3) }
     }

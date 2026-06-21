@@ -24,10 +24,3 @@ enum MacOSImageDecoder {
         return rows
     }
 }
-
-// TEMPORARY back-compat shim so Targeting keeps compiling until Task 8 moves the
-// vision fallback into MacOSDriver. Removed in Task 8.
-extension VisionResolver {
-    static func grayscaleBuffer(pngPath: String) -> [[Double]]? { MacOSImageDecoder.grayscaleBuffer(pngPath: pngPath) }
-    static func grayscaleBuffer(of image: CGImage) -> [[Double]]? { MacOSImageDecoder.grayscaleBuffer(of: image) }
-}

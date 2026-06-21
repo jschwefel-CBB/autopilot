@@ -66,7 +66,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let runner = PlanRunner()
+        let runner = PlanRunner(driver: MacOSDriver())
         let report = try runner.run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
@@ -101,7 +101,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
@@ -137,7 +137,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
@@ -166,7 +166,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         // The click step must resolve (not error on ambiguity) — that's the point.
         let clickStep = report.steps.first { $0.id == "click-first-button" }
         #expect(clickStep?.result == .pass, "report: \(Reporter().humanSummary(report))")
@@ -198,7 +198,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
@@ -225,13 +225,13 @@ import ApplicationServices
                  ])
         }
         // 1) Without --update-snapshots: a missing reference is a FAILURE.
-        let r1 = try PlanRunner().run(makePlan(),
+        let r1 = try PlanRunner(driver: MacOSDriver()).run(makePlan(),
             options: RunOptions(artifactsDir: artifacts, planBaseDir: dir, updateSnapshots: false))
         #expect(r1.steps.first { $0.id == "snap" }?.result == .fail)
 
         killExistingTestHostApps()
         // 2) With --update-snapshots: writes the reference and passes.
-        let r2 = try PlanRunner().run(makePlan(),
+        let r2 = try PlanRunner(driver: MacOSDriver()).run(makePlan(),
             options: RunOptions(artifactsDir: artifacts, planBaseDir: dir, updateSnapshots: true))
         #expect(r2.steps.first { $0.id == "snap" }?.result == .pass)
         #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent(refPath).path))
@@ -273,7 +273,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
@@ -300,7 +300,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
@@ -331,7 +331,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 
@@ -370,7 +370,7 @@ import ApplicationServices
                 Step(id: "quit", action: .terminate),
             ]
         )
-        let report = try PlanRunner().run(plan, options: RunOptions(artifactsDir: artifacts))
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
 }

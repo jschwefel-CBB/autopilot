@@ -4,6 +4,7 @@ import AutopilotCore
 /// Minimal MCP (JSON-RPC 2.0 over stdio) server exposing autopilot tools.
 public final class MCPServer {
     let reporter = Reporter()
+    let driver = MacOSDriver()
     var lastReport: Report?
 
     /// Where emitted JSON-RPC messages go. Defaults to stdout; tests inject a
@@ -64,22 +65,21 @@ public final class MCPServer {
     }
 
     /// Attach to a running app (bundleId/path/pid) — shared by find/suggest.
-    private func attach(_ args: [String: Any]) throws -> LaunchedApp {
-        if let pid = args["pid"] as? Int { return try AppLauncher().attach(pid: pid_t(pid)) }
-        if let b = args["bundleId"] as? String { return try AppLauncher().attach(TargetApp(bundleId: b)) }
-        if let p = args["path"] as? String { return try AppLauncher().attach(TargetApp(path: p)) }
+    private func attach(_ args: [String: Any]) throws -> LaunchedHandle {
+        if let pid = args["pid"] as? Int { return try driver.attach(pid: Int32(pid)) }
+        if let b = args["bundleId"] as? String { return try driver.attach(TargetApp(bundleId: b)) }
+        if let p = args["path"] as? String { return try driver.attach(TargetApp(path: p)) }
         throw AppLaunchError.noRunningInstance("(needs bundleId, path, or pid)")
     }
 
     func findElement(id: Any?, args: [String: Any]) {
         do {
-            let launched = try attach(args)
-            let app = AXTree.application(pid: launched.pid)
-            _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 2000, intervalMs: 100)
+            let app = try attach(args)
+            _ = driver.waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 2000, intervalMs: 100)
             let sel = Selector(role: args["role"] as? String,
                                identifier: args["identifier"] as? String,
                                title: args["title"] as? String)
-            let matches = MacOSAXResolver().findAll(in: app, selector: sel)
+            let matches = driver.findAll(sel, app: app)
             let payload: [String: Any] = ["count": matches.count, "matches": matches]
             respondToolText(id: id, text: String(data: try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]), encoding: .utf8) ?? "{}")
         } catch let e as AppLaunchError {
@@ -89,10 +89,9 @@ public final class MCPServer {
 
     func suggestSelectors(id: Any?, args: [String: Any]) {
         do {
-            let launched = try attach(args)
-            let app = AXTree.application(pid: launched.pid)
-            _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 2000, intervalMs: 100)
-            let suggestions = SelectorSuggester.suggest(from: AXTree.snapshot(app).nodes).map { s -> [String: Any] in
+            let app = try attach(args)
+            _ = driver.waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 2000, intervalMs: 100)
+            let suggestions = driver.suggestSelectors(app: app).map { s -> [String: Any] in
                 let sel = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(s.selector))) ?? [:]
                 return ["role": s.role, "label": s.label, "selector": sel, "note": s.note]
             }
@@ -136,7 +135,7 @@ public final class MCPServer {
             // Thread planBaseDir + updateSnapshots so snapshot/vision relative
             // paths resolve against the plan dir (not CWD) and an MCP caller can
             // create/refresh a snapshot baseline — parity with the CLI.
-            let report = try PlanRunner().run(plan, options: RunOptions(
+            let report = try PlanRunner(driver: driver).run(plan, options: RunOptions(
                 keepGoing: keepGoing, artifactsDir: artifacts,
                 planBaseDir: baseDir, updateSnapshots: updateSnapshots))
             lastReport = report
@@ -159,24 +158,23 @@ public final class MCPServer {
         // ATTACH to the running instance and dump ITS tree — never launch or
         // terminate. Inspecting must observe the app as the user sees it.
         do {
-            let launched: LaunchedApp
+            let app: LaunchedHandle
             if let pid = args["pid"] as? Int {
-                launched = try AppLauncher().attach(pid: pid_t(pid))
+                app = try driver.attach(pid: Int32(pid))
             } else if let bundleId = args["bundleId"] as? String {
-                launched = try AppLauncher().attach(TargetApp(bundleId: bundleId))
+                app = try driver.attach(TargetApp(bundleId: bundleId))
             } else if let path = args["path"] as? String {
-                launched = try AppLauncher().attach(TargetApp(path: path))
+                app = try driver.attach(TargetApp(path: path))
             } else {
                 respond(id: id, error: ["code": -32602, "message": "dump_axtree needs bundleId, path, or pid"]); return
             }
-            let app = AXTree.application(pid: launched.pid)
-            _ = Targeting().waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 2000, intervalMs: 100)
-            let snap = AXTree.snapshot(app)
+            _ = driver.waitForPresence(Selector(role: "AXWindow"), present: true, app: app, timeoutMs: 2000, intervalMs: 100)
+            let snap = driver.dumpTree(app: app)
             let interactiveOnly = (args["interactiveOnly"] as? Bool) ?? false
             let nodes = interactiveOnly ? snap.nodes.filter { AXRoles.isInteractive($0["role"]) } : snap.nodes
             let payload: [String: Any] = [
-                "pid": Int(launched.pid),
-                "appName": launched.runningApp.localizedName ?? "",
+                "pid": Int(app.pid),
+                "appName": app.appName,
                 "truncated": snap.truncated, "nodeCount": nodes.count, "nodes": nodes,
             ]
             let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])

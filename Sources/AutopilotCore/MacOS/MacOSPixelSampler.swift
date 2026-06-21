@@ -36,11 +36,3 @@ enum MacOSPixelSampler {
         return sRGBPixels(of: image).first
     }
 }
-
-// TEMPORARY back-compat shim so PlanRunner keeps compiling until Task 9 migrates
-// it to the driver. Removed in Task 9.
-extension PixelColor {
-    static func sampleRegion(_ rect: CGRect) -> [RGB] { MacOSPixelSampler.sampleRegion(rect) }
-    static func loadPNG(_ path: String) -> [RGB]? { MacOSPixelSampler.loadPNG(path) }
-    static func sample(at point: CGPoint) -> RGB? { MacOSPixelSampler.sample(at: point) }
-}

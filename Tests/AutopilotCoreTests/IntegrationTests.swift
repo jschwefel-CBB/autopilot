@@ -374,4 +374,332 @@ import ApplicationServices
         let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
         #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
     }
+
+    // MARK: - doubleClick
+
+    @Test func doubleClickIncrementsCounter() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-dbl-\(UUID().uuidString)")
+        // dblButton is a custom view registered as AX button; doubleClick fires
+        // clickCount==2 which the view checks and increments dblCount.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: doubleClick",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "dbl", action: .doubleClick, target: Selector(identifier: "dblButton")),
+                // After a double-click dblCount becomes 1, label reads "dbl: 1".
+                Step(id: "check", action: .assert, target: Selector(identifier: "dblLabel"),
+                     assert: Assertion(property: .value, op: .equals, expected: "dbl: 1")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - rightClick
+
+    @Test func rightClickOpensContextMenu() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-rc-\(UUID().uuidString)")
+        // rightClickTarget is a purple NSView. Right-clicking opens a context menu
+        // with a single item "ContextAction". Selecting it updates statusLabel.
+        // We right-click the target, then press the menu item via `menu`-style path.
+        // Because the context menu is transient (not in the main menu bar), we use
+        // click-based resolution: after rightClick the context menu window appears;
+        // press on "ContextAction" AXMenuItem selects it.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: rightClick context menu",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "right-click", action: .rightClick,
+                     target: Selector(identifier: "rightClickTarget")),
+                // After right-click, a context menu appears. Press the AXMenuItem
+                // by its title to dismiss and fire the action.
+                Step(id: "pick-item", action: .press,
+                     target: Selector(role: "AXMenuItem", title: "ContextAction")),
+                // The action updates statusLabel to "status: context-tapped".
+                Step(id: "check-status", action: .assert, target: Selector(identifier: "statusLabel"),
+                     assert: Assertion(property: .value, op: .contains, expected: "context-tapped")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - scroll
+
+    @Test func scrollRevealsHiddenContent() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-scroll-\(UUID().uuidString)")
+        // scrollView contains 10 numbered labels; "scroll-end" is near the bottom
+        // and hidden in the initial viewport. A negative deltaY scrolls down (moves
+        // content up) to reveal it; then we waitFor its presence.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: scroll reveals content",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                // Scroll the scroll view down (deltaY negative = scroll down)
+                Step(id: "scroll-down", action: .scroll, target: Selector(identifier: "scrollView"),
+                     args: { var a = ActionArgs(); a.deltaY = -300; return a }()),
+                // After scrolling, "scroll-end" becomes visible in the AX tree clip
+                Step(id: "assert-end", action: .waitFor,
+                     target: Selector(identifier: "scroll-end"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - drag
+
+    @Test func dragMovesSliderThumb() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-drag-\(UUID().uuidString)")
+        // The slider starts at 0. Dragging from its center to the sliderValueLabel
+        // (which sits to the right of the slider) moves the mouse far enough right
+        // that the slider value becomes > 0. We assert it changed.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: drag slider",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                // Confirm slider starts at 0.
+                Step(id: "assert-zero", action: .assert, target: Selector(identifier: "sliderValueLabel"),
+                     assert: Assertion(property: .value, op: .equals, expected: "slider: 0")),
+                // Drag from slider center to the value label (well to its right).
+                Step(id: "drag-right", action: .drag,
+                     target: Selector(identifier: "slider"),
+                     args: { var a = ActionArgs(); a.to = Selector(identifier: "sliderValueLabel"); return a }()),
+                // After drag the slider must be above 0.
+                Step(id: "assert-moved", action: .assert, target: Selector(identifier: "sliderValueLabel"),
+                     assert: Assertion(property: .value, op: .notEquals, expected: "slider: 0")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - assertPixel
+
+    @Test func assertPixelSamplesKnownColor() async throws {
+        guard AXIsProcessTrusted() else { return }
+        guard CGPreflightScreenCaptureAccess() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-pixel-\(UUID().uuidString)")
+        // colorSwatch is solid #3478F6 (sRGB 52,120,246). assertPixel at its center
+        // must match within the default tolerance (16 RGB units).
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: assertPixel",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "pixel", action: .assertPixel, target: Selector(identifier: "colorSwatch"),
+                     args: { var a = ActionArgs(); a.color = "#3478F6"; a.tolerance = 16; return a }()),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - screenshot
+
+    @Test func screenshotElementCapturesFile() async throws {
+        guard AXIsProcessTrusted() else { return }
+        guard CGPreflightScreenCaptureAccess() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-shot-\(UUID().uuidString)")
+        let outPath = dir.appendingPathComponent("swatch-crop.png").path
+        let artifacts = dir.appendingPathComponent("art")
+        // screenshot with a target crops the element; without a target it captures
+        // the full display. We exercise the element-crop path and verify the file exists.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: screenshot element",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "shot", action: .screenshot, target: Selector(identifier: "colorSwatch"),
+                     args: { var a = ActionArgs(); a.path = outPath; a.padding = 4; return a }()),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+        #expect(FileManager.default.fileExists(atPath: outPath), "screenshot file was not written to \(outPath)")
+    }
+
+    // MARK: - wait
+
+    @Test func waitExplicitDelayPasses() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-wait-\(UUID().uuidString)")
+        // wait is discouraged in production plans but must work correctly.
+        // 0.05 seconds keeps the test fast while still exercising the code path.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: explicit wait",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "pause", action: .wait,
+                     args: { var a = ActionArgs(); a.seconds = 0.05; return a }()),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - focused property
+
+    @Test func focusedPropertyDetectsFirstResponder() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-focus-\(UUID().uuidString)")
+        // searchField is made first responder in applicationDidFinishLaunching.
+        // After the window appears it should report focused=true.
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: focused property",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "search-focused", action: .assert, target: Selector(identifier: "searchField"),
+                     assert: Assertion(property: .focused, op: .equals, expected: "true")),
+                // nameField is NOT the first responder — must be false.
+                Step(id: "name-not-focused", action: .assert, target: Selector(identifier: "nameField"),
+                     assert: Assertion(property: .focused, op: .equals, expected: "false")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - position and size properties
+
+    @Test func positionAndSizePropertiesAreReadable() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-possize-\(UUID().uuidString)")
+        // position and size are returned as "{x, y}" and "{w, h}" strings.
+        // We assert they're non-empty and contain a comma (format sanity).
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: position+size",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                Step(id: "pos", action: .assert, target: Selector(identifier: "colorSwatch"),
+                     assert: Assertion(property: .position, op: .contains, expected: ",")),
+                Step(id: "size", action: .assert, target: Selector(identifier: "colorSwatch"),
+                     assert: Assertion(property: .size, op: .contains, expected: ",")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
+
+    // MARK: - marked property (menu-item checkmark)
+
+    @Test func markedPropertyReadsMenuItemCheckmark() async throws {
+        guard AXIsProcessTrusted() else { return }
+        let binary = testHostApp()
+        guard FileManager.default.fileExists(atPath: binary.path) else { return }
+        killExistingTestHostApps(); defer { killExistingTestHostApps() }
+
+        let artifacts = FileManager.default.temporaryDirectory
+            .appendingPathComponent("autopilot-marked-\(UUID().uuidString)")
+        // "Toggle Flag" starts unchecked (marked=false). After toggling it via the
+        // menu action, the menu item's AXMenuItemMarkChar becomes non-empty (marked=true).
+        let plan = Plan(
+            schemaVersion: "1.0", name: "host: marked property",
+            target: TargetApp(path: binary.path),
+            defaults: PlanDefaults(timeoutMs: 4000, retryIntervalMs: 100),
+            steps: [
+                Step(id: "wait-window", action: .waitFor, target: Selector(role: "AXWindow"),
+                     args: { var a = ActionArgs(); a.present = true; return a }()),
+                // Before toggle: not marked.
+                Step(id: "unchecked", action: .assert,
+                     target: Selector(role: "AXMenuItem", title: "Toggle Flag"),
+                     assert: Assertion(property: .marked, op: .equals, expected: "false")),
+                // Toggle the flag via menu action (same as menuActionInvokesNoShortcutItem).
+                Step(id: "toggle", action: .menu,
+                     args: { var a = ActionArgs(); a.menuPath = ["View", "Toggle Flag"]; return a }()),
+                // After toggle: marked.
+                Step(id: "checked", action: .assert,
+                     target: Selector(role: "AXMenuItem", title: "Toggle Flag"),
+                     assert: Assertion(property: .marked, op: .equals, expected: "true")),
+                Step(id: "quit", action: .terminate),
+            ]
+        )
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(artifactsDir: artifacts))
+        #expect(report.result == .pass, "report: \(Reporter().humanSummary(report))")
+    }
 }

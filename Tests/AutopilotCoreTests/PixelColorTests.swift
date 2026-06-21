@@ -57,9 +57,16 @@ import CoreGraphics
         ctx.setFillColor(red: 52/255, green: 120/255, blue: 246/255, alpha: 1)
         ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
         let img = ctx.makeImage()!
-        let px = PixelColor.sRGBPixels(of: img)
+        let px = MacOSPixelSampler.sRGBPixels(of: img)
         #expect(px.count == 16)
         #expect(PixelColor.matches(px[0], target, tolerance: 4))
+    }
+
+    @Test func rgbColorBridgeRoundTrips() {
+        let neutral = RGBColor(r: 10, g: 20, b: 30)
+        let algebra = PixelColor.RGB(neutral)
+        #expect(algebra.r == 10); #expect(algebra.g == 20); #expect(algebra.b == 30)
+        #expect(algebra.asRGBColor == neutral)
     }
 
     @Test func dominantReturnsActualMeanNotBucketCenter() {

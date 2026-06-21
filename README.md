@@ -12,6 +12,18 @@ Declarative macOS GUI testing and documentation screenshots via the Accessibilit
 - Asserts element properties, pixel colors, region colors, and snapshot diffs for full visual coverage.
 - Captures screenshots at any step — full display, cropped to a named element, or an absolute region. Add `captureTarget: true` to any step for a zero-overhead visual log on every run. Use `target.attach: true` to drive an already-running app from a specific state, making AutoPilot equally useful for producing documentation screenshots as for automated testing.
 - Runs a whole directory of plans in one command and produces an aggregate report.
+- **Plans are human-readable JSON designed to be authored by AI agents.** Point an agent at the MCP server, ask it to write a test plan for your app, and run it — no test framework knowledge required.
+
+## Architecture
+
+AutoPilot is split into two packages:
+
+| Package | Role |
+|---|---|
+| [`autopilot-core`](https://github.com/jschwefel-CBB/autopilot-core) | Platform-agnostic plan model, runner loop, and `AppDriver` protocol |
+| `autopilot-macos` (this repo) | macOS backend: `MacOSDriver` (Accessibility API, screen capture, vision matching) |
+
+The same JSON plan format runs on macOS (this repo), [iOS](https://github.com/jschwefel-CBB/autopilot-ios), and [Android](https://github.com/jschwefel-CBB/autopilot-android).
 
 ## Install
 
@@ -44,7 +56,7 @@ xattr -d com.apple.quarantine /usr/local/bin/AutopilotMCP
 
 ```bash
 git clone https://github.com/jschwefel-CBB/autopilot-macos.git
-cd autopilot
+cd autopilot-macos
 swift build -c release
 # Binaries land in .build/release/autopilot and .build/release/AutopilotMCP
 ```
@@ -97,6 +109,8 @@ For a guided walkthrough, read the **[User Manual](docs/MANUAL.md)**.
 
 ## Plan format at a glance
 
+Plans are JSON — readable by humans, but designed to be authored by AI agents. Connect an agent to the MCP server, describe what you want tested, and the agent produces a ready-to-run plan.
+
 | Action | Needs `target`? | Key args | What it does |
 |---|---|---|---|
 | `click` | yes | — | Single left click at the element's center. |
@@ -110,7 +124,7 @@ Full action reference, selector syntax, visual assertions, and suite-runner docs
 
 ## MCP server
 
-AutoPilot ships an MCP server (`AutopilotMCP`) that exposes the test engine to AI agents.
+AutoPilot ships an MCP server (`AutopilotMCP`) that exposes the test engine to AI agents. Agents can discover UI elements, generate plans, lint them, run them, and inspect results — all without leaving the conversation.
 
 Wire it to Claude Desktop by adding this to your `claude_desktop_config.json`:
 
@@ -144,6 +158,16 @@ Run `autopilot doctor` at any time to check the status of both permissions.
 - macOS 14 or later.
 - Swift 6 toolchain (Xcode 16+) — required only when building from source. The Homebrew and direct-download binaries are pre-built.
 - No App Sandbox. AutoPilot drives other apps via the Accessibility API, which is incompatible with the sandbox.
+
+## Cross-platform
+
+The same JSON plan format runs across platforms:
+
+| Platform | Repo |
+|---|---|
+| macOS | this repo |
+| iOS | [`autopilot-ios`](https://github.com/jschwefel-CBB/autopilot-ios) |
+| Android | [`autopilot-android`](https://github.com/jschwefel-CBB/autopilot-android) |
 
 ## Contributing / license
 

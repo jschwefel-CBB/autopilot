@@ -86,7 +86,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate,
     let quantityLabel = NSTextField(labelWithString: "qty: 0")
     let uploadProgress = APProgressIndicator()
     let advanceButton = NSButton(title: "Advance", target: nil, action: nil)
-    let notesView = NSTextView()
+    let notesView = FocusableTextView()
     let notesScroll = NSScrollView()
     let termsLink = NSButton(title: "Terms & Conditions", target: nil, action: nil)
     let fileTable = NSTableView()
@@ -489,6 +489,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate,
 /// A top-left-origin view so absolute frames lay out from the top down.
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
+}
+
+/// An NSTextView that deterministically takes first responder on mouse-down.
+/// A synthesized focus click (the `type` action clicks an element's center to
+/// focus it before sending keys) does not reliably transfer first-responder
+/// into an NSTextView nested in a scroll view — so without this, typed text
+/// goes nowhere and the field stays empty. Grabbing first responder up front
+/// makes focus deterministic regardless of windowing/session state.
+final class FocusableTextView: NSTextView {
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
+    }
 }
 
 let app = NSApplication.shared

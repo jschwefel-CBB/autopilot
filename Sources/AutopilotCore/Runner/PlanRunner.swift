@@ -79,6 +79,13 @@ public struct PlanRunner {
         // Bring the app frontmost and wait until it is key, so the first
         // synthesized keystroke/click is not dropped on a not-yet-active window.
         _ = launcher.activate(launched, timeoutMs: timeoutMs, intervalMs: intervalMs, clock: clock)
+        // NSRunningApplication.isActive can flip true a beat before the window
+        // server has finished making the window key and ready to receive
+        // synthesized events. Without a short settle, the FIRST one or two
+        // actions occasionally land on a not-yet-interactive window (a dropped
+        // click → count stays 0, or a stray character in a field). A brief
+        // post-activation settle removes that startup race.
+        clock.sleep(0.3)
 
         for step in plan.steps {
             let stepTimeout = step.timeoutMs ?? timeoutMs

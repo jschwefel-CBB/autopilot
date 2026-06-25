@@ -39,7 +39,7 @@ public final class MCPServer {
             respond(id: id, result: [
                 "protocolVersion": "2024-11-05",
                 "capabilities": ["tools": [:]],
-                "serverInfo": ["name": "autopilot", "version": "1.0.0"]
+                "serverInfo": ["name": "autopilot", "version": "2.0.0"]
             ])
         case "tools/list":
             respond(id: id, result: ["tools": Self.toolDefinitions])

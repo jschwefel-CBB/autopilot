@@ -114,7 +114,21 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate,
         window.title = "TestHostApp"
         installMenu()
         buildUI()
-        window.center()
+        // Pin the window to the screen's visible top-left rather than centering.
+        // A centered 900x720 window can have its right column / lower controls
+        // pushed off the usable area on a small or unusual display (e.g. a
+        // headless CI framebuffer) — a coordinate click then lands off-screen
+        // and the control's action never fires (the synthesized click "posts"
+        // but hits nothing). Anchoring top-left keeps the whole window, both
+        // columns included, on-screen regardless of display geometry.
+        if let vf = NSScreen.main?.visibleFrame {
+            // Top-left of the visible frame (AppKit y grows upward, so the
+            // window's bottom-left y = top - height).
+            let origin = NSPoint(x: vf.minX, y: vf.maxY - window.frame.height)
+            window.setFrameOrigin(origin)
+        } else {
+            window.center()
+        }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         // Make the search field first responder so `assert-search-focused`

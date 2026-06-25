@@ -1,21 +1,23 @@
 import Foundation
 import ApplicationServices
 import AppKit
+import AutopilotCore
 
 /// Orchestrates element resolution: AX first, vision fallback (Phase 6),
 /// with poll-until-resolvable semantics driven by the Poller.
 public struct Targeting {
-    let axResolver = AXResolver()
+    let axResolver = MacAXResolver()
     let poller: Poller
     public init(poller: Poller = Poller()) { self.poller = poller }
 
     /// Resolve a selector to exactly one element, polling until available or timeout.
     /// `baseDir`, when set, is the directory of the plan file; `vision.image`
     /// paths are resolved relative to it (matching `include` semantics).
-    public func resolve(_ selector: Selector, app: AXUIElement,
+    public func resolve(_ selector: AutopilotCore.Selector, app: AXUIElement,
                         timeoutMs: Int, intervalMs: Int, baseDir: URL? = nil) throws -> ElementRef {
         var lastError: Error = TargetingError.timedOut(
             selector: AXResolver.describe(selector), timeoutMs: timeoutMs)
+        // AXResolver here is AutopilotCore.AXResolver (pure describe/matches).
         let ok = poller.waitUntil(timeoutMs: timeoutMs, intervalMs: intervalMs) {
             do { _ = try axResolver.resolveOne(in: app, selector: selector); return true }
             catch { lastError = error; return false }
@@ -32,8 +34,8 @@ public struct Targeting {
                                         width: CGFloat(CGDisplayPixelsWide(mainID)),
                                         height: CGFloat(CGDisplayPixelsHigh(mainID)))
                 guard let img = try? ScreenCapture.image(of: screenRect),
-                      let haystack = VisionResolver.grayscaleBuffer(of: img),
-                      let needle = VisionResolver.grayscaleBuffer(pngPath: imagePath),
+                      let haystack = MacVisionDecoder.grayscaleBuffer(of: img),
+                      let needle = MacVisionDecoder.grayscaleBuffer(pngPath: imagePath),
                       let match = VisionResolver.bestMatch(haystack: haystack, needle: needle),
                       match.score >= vision.confidence
                 else { throw lastError }
@@ -57,7 +59,7 @@ public struct Targeting {
     }
 
     /// Wait for an element to be present (or absent). Returns whether the wait succeeded.
-    public func waitForPresence(_ selector: Selector, present: Bool, app: AXUIElement,
+    public func waitForPresence(_ selector: AutopilotCore.Selector, present: Bool, app: AXUIElement,
                                 timeoutMs: Int, intervalMs: Int) -> Bool {
         poller.waitUntil(timeoutMs: timeoutMs, intervalMs: intervalMs) {
             (axResolver.count(in: app, selector: selector) > 0) == present
@@ -66,7 +68,7 @@ public struct Targeting {
 
     /// The full number of elements matching `selector` (for count assertions);
     /// uses a high stopAt so the count isn't capped at the presence threshold.
-    public func matchCount(_ selector: Selector, app: AXUIElement) -> Int {
+    public func matchCount(_ selector: AutopilotCore.Selector, app: AXUIElement) -> Int {
         axResolver.count(in: app, selector: selector, stopAt: .max)
     }
 }

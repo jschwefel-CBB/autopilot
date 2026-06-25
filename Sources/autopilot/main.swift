@@ -2,6 +2,7 @@ import Foundation
 import ApplicationServices
 import ArgumentParser
 import AutopilotCore
+import MacOSDriver
 
 struct Autopilot: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -162,7 +163,7 @@ struct Find: ParsableCommand {
         let launched = try Inspect.attach(app: app, pid: pid)   // attach, never launch
         let appEl = Inspect.appElement(launched)
         let selector = Selector(role: role, identifier: identifier, title: title)
-        let matches = AXResolver().findAll(in: appEl, selector: selector)
+        let matches = MacAXResolver().findAll(in: appEl, selector: selector)
         print("\(matches.count) match(es) for \(AXResolver.describe(selector)):")
         for m in matches { print("  \(m)") }
         if matches.count != 1 { throw ExitCode(1) }
@@ -214,7 +215,7 @@ struct Run: ParsableCommand {
             throw ExitCode(2)
         }
 
-        let report = try PlanRunner().run(plan, options: RunOptions(
+        let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(
             keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir,
             updateSnapshots: updateSnapshots))
         let reporter = Reporter()
@@ -264,7 +265,7 @@ struct Run: ParsableCommand {
             // remaining plans run and suite.json is always written.
             let report: Report
             do {
-                report = try PlanRunner().run(plan, options: RunOptions(
+                report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(
                     keepGoing: keepGoing, artifactsDir: artifactsURL, planBaseDir: baseDir,
                     updateSnapshots: updateSnapshots))
             } catch {

@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import AutopilotCore
+@testable import MacOSDriver
 
 @Suite struct MenuNavigatorTests {
     @Test func findsTitleIndex() {

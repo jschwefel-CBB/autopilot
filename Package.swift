@@ -5,29 +5,37 @@ let package = Package(
     name: "autopilot",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "AutopilotCore", targets: ["AutopilotCore"]),
+        .library(name: "MacOSDriver", targets: ["MacOSDriver"]),
         .executable(name: "autopilot", targets: ["autopilot"]),
         .executable(name: "AutopilotMCP", targets: ["AutopilotMCP"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        .package(path: "../autopilot-core"),
     ],
     targets: [
         .target(
-            name: "AutopilotCore",
+            name: "MacOSDriver",
+            dependencies: [
+                .product(name: "AutopilotCore", package: "autopilot-core"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
             name: "autopilot",
             dependencies: [
-                "AutopilotCore",
+                "MacOSDriver",
+                .product(name: "AutopilotCore", package: "autopilot-core"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(
             name: "AutopilotMCPKit",
-            dependencies: ["AutopilotCore"],
+            dependencies: [
+                "MacOSDriver",
+                .product(name: "AutopilotCore", package: "autopilot-core"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
@@ -37,7 +45,10 @@ let package = Package(
         ),
         .testTarget(
             name: "AutopilotCoreTests",
-            dependencies: ["AutopilotCore"],
+            dependencies: [
+                "MacOSDriver",
+                .product(name: "AutopilotCore", package: "autopilot-core"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(

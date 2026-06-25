@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import AutopilotCore
 
 public struct LaunchedApp {
     public let pid: pid_t

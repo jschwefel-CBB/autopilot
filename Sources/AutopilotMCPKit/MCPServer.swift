@@ -1,5 +1,6 @@
 import Foundation
 import AutopilotCore
+import MacOSDriver
 
 /// Minimal MCP (JSON-RPC 2.0 over stdio) server exposing autopilot tools.
 public final class MCPServer {
@@ -79,7 +80,7 @@ public final class MCPServer {
             let sel = Selector(role: args["role"] as? String,
                                identifier: args["identifier"] as? String,
                                title: args["title"] as? String)
-            let matches = AXResolver().findAll(in: app, selector: sel)
+            let matches = MacAXResolver().findAll(in: app, selector: sel)
             let payload: [String: Any] = ["count": matches.count, "matches": matches]
             respondToolText(id: id, text: String(data: try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]), encoding: .utf8) ?? "{}")
         } catch let e as AppLaunchError {
@@ -136,7 +137,7 @@ public final class MCPServer {
             // Thread planBaseDir + updateSnapshots so snapshot/vision relative
             // paths resolve against the plan dir (not CWD) and an MCP caller can
             // create/refresh a snapshot baseline — parity with the CLI.
-            let report = try PlanRunner().run(plan, options: RunOptions(
+            let report = try PlanRunner(driver: MacOSDriver()).run(plan, options: RunOptions(
                 keepGoing: keepGoing, artifactsDir: artifacts,
                 planBaseDir: baseDir, updateSnapshots: updateSnapshots))
             lastReport = report

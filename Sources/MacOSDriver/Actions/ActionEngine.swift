@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import ApplicationServices
+import AutopilotCore
 
 public struct ActionEngine {
     public init() {}

@@ -98,6 +98,15 @@ public struct ActionEngine {
             // the text nowhere. focus:false types into the already-focused field.
             if args?.focus != false, let ref, let p = point(for: ref) {
                 EventSynthesizer.click(at: p)
+                // Also set AX focus directly. A synthesized click does not
+                // reliably transfer first-responder into some controls (notably
+                // an NSTextView nested in a scroll view, especially on a headless
+                // display) — the keystrokes then go nowhere. Setting
+                // kAXFocusedAttribute makes focus deterministic; harmless where
+                // the click already focused the element.
+                if case .ax(let el) = ref {
+                    AXUIElementSetAttributeValue(el, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+                }
             }
             if args?.clear == true {
                 // Select-all (Cmd-A) then delete, so the field starts empty.

@@ -449,6 +449,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSTextFieldDelegate,
 
     @objc func advanceTapped() {
         uploadProgress.doubleValue = 1.0
+        if let path = ProcessInfo.processInfo.environment["AP_DEBUG_FILE"] {
+            let line = "advanceTapped fired; doubleValue=\(uploadProgress.doubleValue) axValue=\(uploadProgress.accessibilityValue().map(String.init(describing:)) ?? "nil")\n"
+            if let fh = FileHandle(forWritingAtPath: path) { fh.seekToEndOfFile(); fh.write(Data(line.utf8)); try? fh.close() }
+            else { try? line.write(toFile: path, atomically: true, encoding: .utf8) }
+        }
     }
 
     @objc func termsTapped() {

@@ -45,9 +45,15 @@ PY
 echo "==> Running unified plan against $APP"
 # --update-snapshots: create the snapshot baseline on first run (the snapshot
 # step compares a 30x30 swatch crop; with no committed baseline it would fail).
-# No --keep-going: a strict sequential run, so the CLI's non-zero exit on the
-# first failing step fails CI.
-"$CLI" run "$WORK/plan.json" --artifacts "$WORK/artifacts" --update-snapshots
+# --keep-going: run ALL steps so the report shows every failure at once (the
+# report.json check below still fails the job on any failed step). AP_DEBUG_FILE
+# lets the fixture log whether advanceTapped actually fired (diagnosing the CI
+# progress-advance failure).
+export AP_DEBUG_FILE="$WORK/ap-debug.log"
+: > "$AP_DEBUG_FILE"
+"$CLI" run "$WORK/plan.json" --artifacts "$WORK/artifacts" --update-snapshots --keep-going || true
+echo "==> AP_DEBUG (advanceTapped trace):"
+cat "$AP_DEBUG_FILE" 2>/dev/null || echo "(empty — advanceTapped never fired)"
 
 # Belt-and-suspenders: assert the report shows zero failures even if the exit
 # code were ever masked.

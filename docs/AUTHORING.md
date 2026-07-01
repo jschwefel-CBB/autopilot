@@ -1,6 +1,6 @@
 # Writing an AutoPilot Test Plan
 
-> New to AutoPilot? Start with the **[User Manual](MANUAL.md)** for a guided introduction. This document is the complete reference.
+> New to AutoPilot? Start with the **[User Manual](https://github.com/jschwefel-CBB/autopilot-core/blob/main/docs/MANUAL.md)** for a guided introduction (it lives in `autopilot-core` — the plan format is shared across platforms). This document is the macOS-specific reference.
 
 This is the canonical guide for authoring AutoPilot test plans. It is written to
 be usable by **both an AI agent and a human**. An agent working on a target app

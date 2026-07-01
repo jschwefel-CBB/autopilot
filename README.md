@@ -108,7 +108,7 @@ RESULT pass 7/7
 
 Calculator is pre-installed on every Mac, so this plan runs immediately with no setup beyond granting Accessibility permission.
 
-For a guided walkthrough, read the **[User Manual](docs/MANUAL.md)**.
+For a guided walkthrough, read the **[User Manual](https://github.com/jschwefel-CBB/autopilot-core/blob/main/docs/MANUAL.md)** (lives in `autopilot-core`, since the plan format is shared across macOS, iOS, and Android).
 
 ## Plan format at a glance
 
